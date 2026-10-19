@@ -25,12 +25,13 @@ export interface Config {
 }
 export const DEFAULT_CONFIG: Config = { minBid: 16, maxBid: 28, marriageAdjust: 4, marriageNeedsTrick: true };
 
-export type Phase = 'bidding' | 'trump-select' | 'playing' | 'finished';
+export type Phase = 'bidding' | 'trump-select' | 'single' | 'double' | 'redouble' | 'playing' | 'finished';
 
 export type Action =
   | { type: 'bid'; amount: number }
   | { type: 'pass' }
   | { type: 'setTrump'; suit?: Suit; seventh?: boolean }               // bidder names the trump suit (secret until revealed)
+  | { type: 'single'; on: boolean } | { type: 'double'; on: boolean } | { type: 'redouble'; on: boolean }
   | { type: 'reveal' }                              // void in led suit: ask to see trump
   | { type: 'play'; card: Card; declareMarriage?: boolean };
 
@@ -39,6 +40,7 @@ export interface RoundResult {
   points: [number, number]; bidderWon: boolean;
   delta: [number, number]; // game-point change per team (bidding team +1 / -1)
   marriage: Team | null;
+  single: boolean; stake: number; amount: number; // amount = game points won/lost by the bidding team
 }
 
 interface State {
@@ -51,6 +53,7 @@ interface State {
   trick: { seat: Seat; card: Card }[]; ledSuit: Suit | null;
   tricksWon: [number, number]; points: [number, number]; tricksPlayed: number;
   marriage: Team | null; result: RoundResult | null; notice: string;
+  single: boolean; stake: number; sitOut: Seat | null; queue: Seat[];
 }
 
 export class Game {
@@ -78,7 +81,7 @@ export class Game {
       trumpSuit: null, seventhCard: null, trumpRevealed: false, revealAsked: false, revealedBy: null,
       trick: [], ledSuit: null,
       tricksWon: [0, 0], points: [0, 0], tricksPlayed: 0,
-      marriage: null, result: null, notice,
+      marriage: null, result: null, notice, single: false, stake: 1, sitOut: null, queue: [],
     };
   }
 
@@ -103,7 +106,7 @@ export class Game {
 
   canDeclareMarriage(seat: Seat, card: Card): boolean {
     const s = this.s;
-    if (s.phase !== 'playing' || !s.trumpRevealed || s.marriage !== null) return false;
+    if (s.phase !== 'playing' || !s.trumpRevealed || s.marriage !== null || s.single) return false;
     if (card.suit !== s.trumpSuit || (card.rank !== 'K' && card.rank !== 'Q')) return false;
     const other: Rank = card.rank === 'K' ? 'Q' : 'K';
     if (!s.hands[seat].some(c => c.suit === s.trumpSuit && c.rank === other)) return false;
@@ -118,6 +121,8 @@ export class Game {
     } else if (s.phase === 'trump-select') {
       for (const suit of SUITS) out.push({ type: 'setTrump', suit });
       out.push({ type: 'setTrump', seventh: true }); // let the bidder's 7th card decide
+    } else if (s.phase === 'single' || s.phase === 'double' || s.phase === 'redouble') {
+      out.push({ type: s.phase, on: true }, { type: s.phase, on: false });
     } else if (s.phase === 'playing') {
       if (this.canAskReveal(seat)) out.push({ type: 'reveal' });
       for (const card of this.playable(seat)) {
@@ -140,6 +145,7 @@ export class Game {
       trumpSuit: s.trumpRevealed || seat === s.bidder ? s.trumpSuit : null,
       notice: s.notice,
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
+      single: s.single, stake: s.stake, sitOut: s.sitOut, trickSize: s.single ? 3 : 4,
       trick: s.trick, ledSuit: s.ledSuit,
       tricksWon: s.tricksWon, marriage: s.marriage,
       points: s.phase === 'finished' ? s.points : null,
@@ -183,8 +189,25 @@ export class Game {
         }
         const why = this.badDeal();
         if (why) { this.startRound(s.dealer, why); return; }   // same dealer reshuffles
-        s.phase = 'playing';
-        s.turn = nextSeat(s.bidder!);
+        s.phase = 'single'; s.turn = s.bidder!;            // next: bidder may go single hand
+        return;
+      }
+      case 'single': {
+        if (s.phase !== 'single') throw new Error('Not the single-hand decision');
+        if (a.on) {                                       // play alone: partner sits out, no double possible
+          s.single = true; s.sitOut = ((s.bidder! + 2) % 4) as Seat; s.hands[s.sitOut] = [];
+          this.beginPlay();
+        } else this.askDouble();
+        return;
+      }
+      case 'double': {
+        if (s.phase !== 'double') throw new Error('Not the double decision');
+        if (a.on) { s.stake = 2; this.askRedouble(); } else this.nextAsk();
+        return;
+      }
+      case 'redouble': {
+        if (s.phase !== 'redouble') throw new Error('Not the redouble decision');
+        if (a.on) { s.stake = 4; this.beginPlay(); } else this.nextAsk();
         return;
       }
       case 'reveal': {
@@ -207,13 +230,19 @@ export class Game {
         if (!s.trick.length) s.ledSuit = a.card.suit;
         s.trick.push({ seat, card: a.card });
         s.revealAsked = false;
-        if (s.trick.length === 4) this.finishTrick(); else s.turn = nextSeat(seat);
+        if (s.trick.length === (s.single ? 3 : 4)) this.finishTrick(); else s.turn = this.nextPlayer(seat);
         return;
       }
     }
   }
 
   // ---------- internals ----------
+  private nextPlayer(seat: Seat): Seat { let t = nextSeat(seat); if (t === this.s.sitOut) t = nextSeat(t); return t; }
+  private beginPlay() { const s = this.s; s.phase = 'playing'; s.turn = nextSeat(s.bidder!); }
+  private askDouble() { const s = this.s, b = s.bidder!; s.phase = 'double'; s.queue = [nextSeat(b), ((b + 3) % 4) as Seat]; s.turn = s.queue[0]; }
+  private askRedouble() { const s = this.s, b = s.bidder!; s.phase = 'redouble'; s.queue = [b, ((b + 2) % 4) as Seat]; s.turn = s.queue[0]; }
+  private nextAsk() { const s = this.s; s.queue.shift(); if (s.queue.length) s.turn = s.queue[0]; else this.beginPlay(); }
+
   // After all 8 cards are dealt: returns a reason if the deal must be thrown in.
   private badDeal(): string {
     const s = this.s, bt = teamOf(s.bidder!);
@@ -251,7 +280,8 @@ export class Game {
     s.points[team] += s.trick.reduce((n, p) => n + cardPoints(p.card), 0);
     s.tricksWon[team]++; s.tricksPlayed++;
     s.trick = []; s.ledSuit = null; s.turn = winner;
-    if (s.tricksPlayed === 8) this.finishRound();
+    // single hand ends the moment the opponents win a trick
+    if (s.tricksPlayed === 8 || (s.single && team !== teamOf(s.bidder!))) this.finishRound();
   }
 
   private finishRound() {
@@ -260,10 +290,18 @@ export class Game {
     let target = s.bid;
     if (s.marriage === bt) target = Math.max(this.cfg.minBid, target - this.cfg.marriageAdjust);
     else if (s.marriage !== null) target = Math.min(this.cfg.maxBid, target + this.cfg.marriageAdjust);
-    const won = s.points[bt] >= target;
+    const won = s.single ? s.tricksWon[bt] === 8 : s.points[bt] >= target;
     const delta: [number, number] = [0, 0];
-    delta[bt] = won ? 1 : -1;
-    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage };
+    const amount = s.single ? 4 : s.stake;
+    delta[bt] = won ? amount : -amount;
+    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage, single: s.single, stake: s.stake, amount };
     s.phase = 'finished';
   }
+}
+
+// A team reaching +6 (or the other team reaching -6) wins the game.
+export function gameWinner(total: number[]): Team | null {
+  if (total[0] >= 6 || total[1] <= -6) return 0;
+  if (total[1] >= 6 || total[0] <= -6) return 1;
+  return null;
 }

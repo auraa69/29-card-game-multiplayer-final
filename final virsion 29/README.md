@@ -19,3 +19,10 @@ assetlinks.json matches the one you set in PWABuilder.
 
 ## Source
 src/engine.ts holds the rules, src/test.ts is the simulation test. engine.js and bot.js are the built runtime files.
+
+## Voice messages
+Online rooms have a mic button: hold it to record up to 8 seconds, release to send. The server only relays the clip to the other
+players and never stores it. The browser asks for microphone permission once. Tap a player's avatar to mute them.
+
+## Note
+This zip does not contain public/.well-known/assetlinks.json. If you already added yours, keep it.

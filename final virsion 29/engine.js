@@ -24,6 +24,7 @@ __export(engine_exports, {
   RANKS_HIGH_TO_LOW: () => RANKS_HIGH_TO_LOW,
   SUITS: () => SUITS,
   cardPoints: () => cardPoints,
+  gameWinner: () => gameWinner,
   nextSeat: () => nextSeat,
   sameCard: () => sameCard,
   strength: () => strength,
@@ -80,7 +81,11 @@ var Game = class {
       tricksPlayed: 0,
       marriage: null,
       result: null,
-      notice
+      notice,
+      single: false,
+      stake: 1,
+      sitOut: null,
+      queue: []
     };
   }
   // ---------- queries ----------
@@ -101,7 +106,7 @@ var Game = class {
   }
   canDeclareMarriage(seat, card) {
     const s = this.s;
-    if (s.phase !== "playing" || !s.trumpRevealed || s.marriage !== null) return false;
+    if (s.phase !== "playing" || !s.trumpRevealed || s.marriage !== null || s.single) return false;
     if (card.suit !== s.trumpSuit || card.rank !== "K" && card.rank !== "Q") return false;
     const other = card.rank === "K" ? "Q" : "K";
     if (!s.hands[seat].some((c) => c.suit === s.trumpSuit && c.rank === other)) return false;
@@ -115,6 +120,8 @@ var Game = class {
     } else if (s.phase === "trump-select") {
       for (const suit of SUITS) out.push({ type: "setTrump", suit });
       out.push({ type: "setTrump", seventh: true });
+    } else if (s.phase === "single" || s.phase === "double" || s.phase === "redouble") {
+      out.push({ type: s.phase, on: true }, { type: s.phase, on: false });
     } else if (s.phase === "playing") {
       if (this.canAskReveal(seat)) out.push({ type: "reveal" });
       for (const card of this.playable(seat)) {
@@ -144,6 +151,10 @@ var Game = class {
       trumpSuit: s.trumpRevealed || seat === s.bidder ? s.trumpSuit : null,
       notice: s.notice,
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
+      single: s.single,
+      stake: s.stake,
+      sitOut: s.sitOut,
+      trickSize: s.single ? 3 : 4,
       trick: s.trick,
       ledSuit: s.ledSuit,
       tricksWon: s.tricksWon,
@@ -191,8 +202,34 @@ var Game = class {
           this.startRound(s.dealer, why);
           return;
         }
-        s.phase = "playing";
-        s.turn = nextSeat(s.bidder);
+        s.phase = "single";
+        s.turn = s.bidder;
+        return;
+      }
+      case "single": {
+        if (s.phase !== "single") throw new Error("Not the single-hand decision");
+        if (a.on) {
+          s.single = true;
+          s.sitOut = (s.bidder + 2) % 4;
+          s.hands[s.sitOut] = [];
+          this.beginPlay();
+        } else this.askDouble();
+        return;
+      }
+      case "double": {
+        if (s.phase !== "double") throw new Error("Not the double decision");
+        if (a.on) {
+          s.stake = 2;
+          this.askRedouble();
+        } else this.nextAsk();
+        return;
+      }
+      case "redouble": {
+        if (s.phase !== "redouble") throw new Error("Not the redouble decision");
+        if (a.on) {
+          s.stake = 4;
+          this.beginPlay();
+        } else this.nextAsk();
         return;
       }
       case "reveal": {
@@ -216,13 +253,41 @@ var Game = class {
         if (!s.trick.length) s.ledSuit = a.card.suit;
         s.trick.push({ seat, card: a.card });
         s.revealAsked = false;
-        if (s.trick.length === 4) this.finishTrick();
-        else s.turn = nextSeat(seat);
+        if (s.trick.length === (s.single ? 3 : 4)) this.finishTrick();
+        else s.turn = this.nextPlayer(seat);
         return;
       }
     }
   }
   // ---------- internals ----------
+  nextPlayer(seat) {
+    let t = nextSeat(seat);
+    if (t === this.s.sitOut) t = nextSeat(t);
+    return t;
+  }
+  beginPlay() {
+    const s = this.s;
+    s.phase = "playing";
+    s.turn = nextSeat(s.bidder);
+  }
+  askDouble() {
+    const s = this.s, b = s.bidder;
+    s.phase = "double";
+    s.queue = [nextSeat(b), (b + 3) % 4];
+    s.turn = s.queue[0];
+  }
+  askRedouble() {
+    const s = this.s, b = s.bidder;
+    s.phase = "redouble";
+    s.queue = [b, (b + 2) % 4];
+    s.turn = s.queue[0];
+  }
+  nextAsk() {
+    const s = this.s;
+    s.queue.shift();
+    if (s.queue.length) s.turn = s.queue[0];
+    else this.beginPlay();
+  }
   // After all 8 cards are dealt: returns a reason if the deal must be thrown in.
   badDeal() {
     const s = this.s, bt = teamOf(s.bidder);
@@ -262,7 +327,7 @@ var Game = class {
     s.trick = [];
     s.ledSuit = null;
     s.turn = winner;
-    if (s.tricksPlayed === 8) this.finishRound();
+    if (s.tricksPlayed === 8 || s.single && team !== teamOf(s.bidder)) this.finishRound();
   }
   finishRound() {
     const s = this.s;
@@ -270,10 +335,16 @@ var Game = class {
     let target = s.bid;
     if (s.marriage === bt) target = Math.max(this.cfg.minBid, target - this.cfg.marriageAdjust);
     else if (s.marriage !== null) target = Math.min(this.cfg.maxBid, target + this.cfg.marriageAdjust);
-    const won = s.points[bt] >= target;
+    const won = s.single ? s.tricksWon[bt] === 8 : s.points[bt] >= target;
     const delta = [0, 0];
-    delta[bt] = won ? 1 : -1;
-    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage };
+    const amount = s.single ? 4 : s.stake;
+    delta[bt] = won ? amount : -amount;
+    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage, single: s.single, stake: s.stake, amount };
     s.phase = "finished";
   }
 };
+function gameWinner(total) {
+  if (total[0] >= 6 || total[1] <= -6) return 0;
+  if (total[1] >= 6 || total[0] <= -6) return 1;
+  return null;
+}

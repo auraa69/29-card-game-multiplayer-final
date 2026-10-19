@@ -8,6 +8,7 @@ app.use('/.well-known', express.static(__dirname + '/public/.well-known', { dotf
 const srv = http.createServer(app), io = new Server(srv, { cors: { origin: '*' } });
 const rooms = new Map();
 const SY = { S: '♠', H: '♥', D: '♦', C: '♣' };
+const cleanAv = a => (Number.isInteger(a) && a >= 0 && a < 12 ? a : 0);
 const clean = n => String(n || 'Player').trim().slice(0, 14) || 'Player';
 const newCode = () => { let c; do { c = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random() * 24 | 0]).join(''); } while (rooms.has(c)); return c; };
 
@@ -18,9 +19,9 @@ function emitAll(r) {
     if (!s || !s.sid) return;
     io.to(s.sid).emit('room', {
       code: r.code, you: i, host: r.host, started: !!r.game,
-      seats: r.seats.map(x => x && { name: x.name, bot: !!x.bot, on: !!(x.bot || x.sid) }),
+      seats: r.seats.map(x => x && { name: x.name, bot: !!x.bot, on: !!(x.bot || x.sid), av: x.av | 0 }),
     });
-    if (r.game) io.to(s.sid).emit('state', { view: r.game.view(i), names, total: r.total, lastTrick: r.last, ev: r.ev });
+    if (r.game) io.to(s.sid).emit('state', { view: r.game.view(i), names, total: r.total, lastTrick: r.last, ev: r.ev, avs: r.seats.map(x => (x && x.av) | 0), winner: E.gameWinner(r.total) });
   });
 }
 
@@ -29,13 +30,16 @@ function desc(r, seat, a) {
   if (a.type === 'bid') return `${n} bid ${a.amount}`;
   if (a.type === 'pass') return `${n} passed`;
   if (a.type === 'setTrump') return `${n} set the hidden trump`;
+  if (a.type === 'single') return a.on ? `${n} goes SINGLE HAND, partner sits out` : `${n} plays with a partner`;
+  if (a.type === 'double') return a.on ? `${n} calls DOUBLE!` : `${n} passes on double`;
+  if (a.type === 'redouble') return a.on ? `${n} calls REDOUBLE!` : `${n} declines to redouble`;
   if (a.type === 'reveal') return `${n} asked for trump: ${SY[r.game.s.trumpSuit]}${r.game.s.seventhCard ? ' (7th card ' + r.game.s.seventhCard.rank + SY[r.game.s.seventhCard.suit] + ')' : ''}`;
   return `${n} played ${a.card.rank}${SY[a.card.suit]}${a.declareMarriage ? ' — marriage!' : ''}`;
 }
 
 function apply(r, seat, a) {
   const g = r.game, before = g.s;
-  const done = a.type === 'play' && before.trick.length === 3 ? [...before.trick, { seat, card: a.card }] : null;
+  const done = a.type === 'play' && before.trick.length === (before.single ? 2 : 3) ? [...before.trick, { seat, card: a.card }] : null;
   g.act(seat, a);                                   // throws if illegal
   r.ev = g.s !== before ? (g.s.notice || 'New deal') : desc(r, seat, a);
   if (done) r.last = { id: ++r.lastId, cards: done };
@@ -63,14 +67,14 @@ io.on('connection', sock => {
   let room = null, seat = -1;
   const bind = (r, i) => { room = r; seat = i; r.seats[i].sid = sock.id; };
 
-  sock.on('create', ({ name, token }, cb) => {
+  sock.on('create', ({ name, token, av }, cb) => {
     const r = { code: newCode(), seats: [null, null, null, null], host: 0, game: null, total: [0, 0], last: null, lastId: 0, scored: null, ev: '', t: Date.now() };
     rooms.set(r.code, r);
-    r.seats[0] = { name: clean(name), token: String(token) };
+    r.seats[0] = { name: clean(name), token: String(token), av: cleanAv(av) };
     bind(r, 0); cb({ ok: 1, code: r.code }); emitAll(r);
   });
 
-  sock.on('join', ({ code, name, token }, cb) => {
+  sock.on('join', ({ code, name, token, av }, cb) => {
     const r = rooms.get(String(code || '').toUpperCase());
     if (!r) return cb({ err: 'Room not found' });
     let i = r.seats.findIndex(s => s && !s.bot && s.token === String(token));   // reconnect
@@ -78,7 +82,7 @@ io.on('connection', sock => {
       if (r.game) return cb({ err: 'That game has already started' });
       i = r.seats.findIndex(s => !s);
       if (i < 0) return cb({ err: 'Room is full' });
-      r.seats[i] = { name: clean(name), token: String(token) };
+      r.seats[i] = { name: clean(name), token: String(token), av: cleanAv(av) };
     }
     bind(r, i); cb({ ok: 1, code: r.code }); emitAll(r);
   });
@@ -92,7 +96,7 @@ io.on('connection', sock => {
 
   sock.on('bot', ({ seat: j, on }) => {
     if (!room || room.game || room.host !== seat || !(j >= 0 && j < 4)) return;
-    if (on && !room.seats[j]) room.seats[j] = { name: 'Bot ' + (j + 1), bot: true };
+    if (on && !room.seats[j]) room.seats[j] = { name: 'Bot ' + (j + 1), bot: true, av: 10 };
     else if (!on && room.seats[j] && room.seats[j].bot) room.seats[j] = null;
     emitAll(room);
   });
@@ -110,8 +114,19 @@ io.on('connection', sock => {
 
   sock.on('next', () => {
     if (!room || !room.game || room.host !== seat || room.game.s.phase !== 'finished') return;
+    if (E.gameWinner(room.total) !== null) room.total = [0, 0];   // game over -> new game
     room.game.startRound(E.nextSeat(room.game.s.dealer));
     room.last = null; room.ev = ''; emitAll(room); pump(room);
+  });
+
+  let lastVoice = 0;                                   // voice messages are only relayed, never stored
+  sock.on('voice', v => {
+    const d = v && v.data;
+    if (!room || seat < 0 || !d || !(Buffer.isBuffer(d) || d instanceof ArrayBuffer)) return;
+    if (d.byteLength < 500 || d.byteLength > 200000 || Date.now() - lastVoice < 1500) return;
+    lastVoice = Date.now();
+    const mime = /^audio\/(webm|mp4|ogg)/.test(String(v.mime)) ? String(v.mime) : 'audio/webm';
+    room.seats.forEach((s, i) => { if (s && s.sid && i !== seat) io.to(s.sid).emit('voice', { from: seat, mime, data: d }); });
   });
 
   sock.on('disconnect', () => {
