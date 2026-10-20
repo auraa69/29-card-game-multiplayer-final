@@ -31,6 +31,7 @@ h2{font:700 22px Georgia,serif;margin:0 0 8px}
 .p2{grid-area:1/2}.p1{grid-area:2/3}.p3{grid-area:2/1}.p0{grid-area:3/2}
 .card{position:relative;width:var(--cw);height:calc(var(--cw)*1.4);background:var(--ivory);color:var(--cardink);border:1px solid #cfc6b0;border-radius:7px;font:700 calc(var(--cw)*.36)/1 Georgia,"Iowan Old Style",serif;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0}
 .card i{font-style:normal;font-size:1.2em}.card.red{color:var(--red)}
+.card.img{background:none;border:0;border-radius:5%;padding:0}.card.img img{width:100%;height:100%;display:block;pointer-events:none;-webkit-user-drag:none}.card.img.seven::after{background:#2f6f95;color:#fff;padding:0 4px;border-radius:3px;bottom:4px}
 .card.seven::after{content:"7th";position:absolute;bottom:2px;font:600 9px system-ui,sans-serif;color:#2f6f95}
 #center .card{width:calc(var(--cw)*.8);height:calc(var(--cw)*1.12)}
 .av{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:50%;font-size:24px;line-height:1;border:2px solid var(--mute);background:rgba(0,0,0,.25);margin-bottom:3px}
@@ -149,7 +150,8 @@ let tok;try{tok=localStorage.t||(localStorage.t=Math.random().toString(36).slice
 const $=id=>document.getElementById(id),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const seatOf=r=>(my+r)%4,nm=k=>k===my?'You':names[k],cs=c=>c.rank+SYM[c.suit];
 const isRed=s=>s==='H'||s==='D',face=k=>AVS[avs[k]]||'🙂';
-const cardHTML=(c,cls='',i='',tag='div')=>`<${tag} class="card ${isRed(c.suit)?'red':''} ${cls}" ${i!==''?`data-i="${i}"`:''}>${c.rank}<i>${SYM[c.suit]}</i></${tag}>`;
+const IMG=!!window.CARD_IMAGES;   // custom card art (set in config.js)
+const cardHTML=(c,cls='',i='',tag='div')=>IMG?`<${tag} class="card img ${cls}" ${i!==''?`data-i="${i}"`:''} aria-label="${c.rank}${SYM[c.suit]}"><img src="cards/${c.suit}-${c.rank}.webp" alt="${c.rank}${SYM[c.suit]}" draggable="false"></${tag}>`:`<${tag} class="card ${isRed(c.suit)?'red':''} ${cls}" ${i!==''?`data-i="${i}"`:''}>${c.rank}<i>${SYM[c.suit]}</i></${tag}>`;
 const show=id=>['menu','lobby','game'].forEach(x=>$(x).hidden=x!==id);
 const ring=k=>'av '+(k%2===my%2?'t0':'t1')+(V.bidder===k?' bid':'')+(talking===k?' talk':'');
 
@@ -343,6 +345,7 @@ $('menu').onclick=e=>{
 };
 try{if(localStorage.n)$('name').value=localStorage.n;if(localStorage.a)myAv=Math.min(11,+localStorage.a||0)}catch(_){}
 drawAvs();
+if(IMG)setTimeout(()=>{for(const s of 'SHCD')for(const r of ['7','8','9','10','J','Q','K','A'])new Image().src=`cards/${s}-${r}.webp`;},400);
 if(typeof io==='undefined'){document.querySelectorAll('.net').forEach(x=>x.hidden=true);$('netnote').hidden=false;}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>

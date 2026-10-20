@@ -26,3 +26,8 @@ players and never stores it. The browser asks for microphone permission once. Ta
 
 ## Note
 This zip does not contain public/.well-known/assetlinks.json. If you already added yours, keep it.
+
+## Card art
+The picture cards are in public/cards (S/H/D/C-7..A.webp plus back.webp, 180x252, about 600 KB in total).
+To turn them off and use plain drawn cards, delete the CARD_IMAGES line in public/config.js.
+To replace a card, put a new 180x252 WebP with the same file name in that folder.
