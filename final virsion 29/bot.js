@@ -19,7 +19,7 @@ function botMove(v){
   if(v.phase==='single'){const t=v.hand.filter(c=>c.suit===v.trumpSuit);return {type:'single',on:t.length>=5&&t.some(c=>c.rank==='J')&&t.some(c=>c.rank==='9')};}
   if(v.phase==='double'||v.phase==='redouble'){
     const p=v.hand.reduce((n,c)=>n+E.cardPoints(c),0);
-    return {type:v.phase,on:v.phase==='double'?(v.bid>=20&&p>=9):p>=10};
+    return {type:v.phase,on:v.phase==='double'?(v.bid>=20&&p>=5):p>=6};
   }
   if(L.some(a=>a.type==='reveal')&&Math.random()<.6)return {type:'reveal'};
   const plays=L.filter(a=>a.type==='play'),m=plays.find(a=>a.declareMarriage);

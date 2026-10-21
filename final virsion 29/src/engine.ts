@@ -197,7 +197,7 @@ export class Game {
         if (a.on) {                                       // play alone: partner sits out, no double possible
           s.single = true; s.sitOut = ((s.bidder! + 2) % 4) as Seat; s.hands[s.sitOut] = [];
           this.beginPlay();
-        } else this.askDouble();
+        } else this.beginPlay();
         return;
       }
       case 'double': {
@@ -207,7 +207,7 @@ export class Game {
       }
       case 'redouble': {
         if (s.phase !== 'redouble') throw new Error('Not the redouble decision');
-        if (a.on) { s.stake = 4; this.beginPlay(); } else this.nextAsk();
+        if (a.on) { s.stake = 4; this.toTrump(); } else this.nextAsk();
         return;
       }
       case 'reveal': {
@@ -239,9 +239,10 @@ export class Game {
   // ---------- internals ----------
   private nextPlayer(seat: Seat): Seat { let t = nextSeat(seat); if (t === this.s.sitOut) t = nextSeat(t); return t; }
   private beginPlay() { const s = this.s; s.phase = 'playing'; s.turn = nextSeat(s.bidder!); }
+  private toTrump() { const s = this.s; s.phase = 'trump-select'; s.turn = s.bidder!; }
   private askDouble() { const s = this.s, b = s.bidder!; s.phase = 'double'; s.queue = [nextSeat(b), ((b + 3) % 4) as Seat]; s.turn = s.queue[0]; }
   private askRedouble() { const s = this.s, b = s.bidder!; s.phase = 'redouble'; s.queue = [b, ((b + 2) % 4) as Seat]; s.turn = s.queue[0]; }
-  private nextAsk() { const s = this.s; s.queue.shift(); if (s.queue.length) s.turn = s.queue[0]; else this.beginPlay(); }
+  private nextAsk() { const s = this.s; s.queue.shift(); if (s.queue.length) s.turn = s.queue[0]; else this.toTrump(); }
 
   // After all 8 cards are dealt: returns a reason if the deal must be thrown in.
   private badDeal(): string {
@@ -257,7 +258,7 @@ export class Game {
     const active = ([0, 1, 2, 3] as Seat[]).filter(i => !s.passed[i]);
     if (s.highBidder !== null && (active.length === 1 || s.highBid === this.cfg.maxBid)) {
       s.bidder = s.highBidder; s.bid = s.highBid;
-      s.phase = 'trump-select'; s.turn = s.bidder;
+      this.askDouble();                                   // double / redouble come right after the bid
     } else if (s.highBidder === null && active.length <= 1) {
       this.startRound(s.dealer, 'Three players passed, so the cards are reshuffled');
     } else {

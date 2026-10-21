@@ -213,7 +213,7 @@ var Game = class {
           s.sitOut = (s.bidder + 2) % 4;
           s.hands[s.sitOut] = [];
           this.beginPlay();
-        } else this.askDouble();
+        } else this.beginPlay();
         return;
       }
       case "double": {
@@ -228,7 +228,7 @@ var Game = class {
         if (s.phase !== "redouble") throw new Error("Not the redouble decision");
         if (a.on) {
           s.stake = 4;
-          this.beginPlay();
+          this.toTrump();
         } else this.nextAsk();
         return;
       }
@@ -270,6 +270,11 @@ var Game = class {
     s.phase = "playing";
     s.turn = nextSeat(s.bidder);
   }
+  toTrump() {
+    const s = this.s;
+    s.phase = "trump-select";
+    s.turn = s.bidder;
+  }
   askDouble() {
     const s = this.s, b = s.bidder;
     s.phase = "double";
@@ -286,7 +291,7 @@ var Game = class {
     const s = this.s;
     s.queue.shift();
     if (s.queue.length) s.turn = s.queue[0];
-    else this.beginPlay();
+    else this.toTrump();
   }
   // After all 8 cards are dealt: returns a reason if the deal must be thrown in.
   badDeal() {
@@ -302,8 +307,7 @@ var Game = class {
     if (s.highBidder !== null && (active.length === 1 || s.highBid === this.cfg.maxBid)) {
       s.bidder = s.highBidder;
       s.bid = s.highBid;
-      s.phase = "trump-select";
-      s.turn = s.bidder;
+      this.askDouble();
     } else if (s.highBidder === null && active.length <= 1) {
       this.startRound(s.dealer, "Three players passed, so the cards are reshuffled");
     } else {
