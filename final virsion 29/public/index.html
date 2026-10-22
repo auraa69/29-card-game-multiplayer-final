@@ -146,18 +146,18 @@ function botMove(v){
 
 
 let mode=null,V=null,my=0,names=['You','Right','Partner','Left'],avs=[0,10,10,10],total=[0,0],winner=null,busy=false,msg='',shown=null,marry=false,sorted=[],game=null,scored=null,sock=null,room=null,rc=null,myName='Player',myAv=0,lastId=0,stimer=null;
-let talking=null,rec=null,holding=false,recTimer=null,allMute=false,vq=[],vplaying=false,pending=null;const muted=new Set();
+let lockUntil=0,talking=null,rec=null,holding=false,recTimer=null,allMute=false,vq=[],vplaying=false,pending=null;const muted=new Set();
 let tok;try{tok=localStorage.t||(localStorage.t=Math.random().toString(36).slice(2))}catch(_){tok=Math.random().toString(36).slice(2)}
 const $=id=>document.getElementById(id),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const seatOf=r=>(my+r)%4,nm=k=>k===my?'You':names[k],cs=c=>c.rank+SYM[c.suit];
 const isRed=s=>s==='H'||s==='D',face=k=>AVS[avs[k]]||'🙂';
 const IMG=!!window.CARD_IMAGES;   // custom card art (set in config.js)
-const cardHTML=(c,cls='',i='',tag='div')=>IMG?`<${tag} class="card img ${cls}" ${i!==''?`data-i="${i}"`:''} aria-label="${c.rank}${SYM[c.suit]}"><img src="cards/${c.suit}-${c.rank}.webp" alt="${c.rank}${SYM[c.suit]}" draggable="false"></${tag}>`:`<${tag} class="card ${isRed(c.suit)?'red':''} ${cls}" ${i!==''?`data-i="${i}"`:''}>${c.rank}<i>${SYM[c.suit]}</i></${tag}>`;
+const cardHTML=(c,cls='',i='',tag='div')=>IMG?`<${tag} class="card img ${cls}" ${i!==''?`data-i="${i}"`:''} aria-label="${c.rank}${SYM[c.suit]}"><img src="cards/${c.suit}-${c.rank}.webp?v=${window.CARD_V||1}" alt="${c.rank}${SYM[c.suit]}" draggable="false"></${tag}>`:`<${tag} class="card ${isRed(c.suit)?'red':''} ${cls}" ${i!==''?`data-i="${i}"`:''}>${c.rank}<i>${SYM[c.suit]}</i></${tag}>`;
 const show=id=>['menu','lobby','game'].forEach(x=>$(x).hidden=x!==id);
 const ring=k=>'av '+(k%2===my%2?'t0':'t1')+(V.bidder===k?' bid':'')+(talking===k?' talk':'');
 
 function render(){
-  const v=V,mine=v.turn===my&&!busy&&v.phase!=='finished',mt=my%2;
+  const v=V,mine=v.turn===my&&!busy&&Date.now()>=lockUntil&&v.phase!=='finished',mt=my%2;
   $('score').textContent=`Us ${total[mt]} : Them ${total[1-mt]}`;
   const tc=$('trump');
   if(v.trumpRevealed){tc.className='chip on';tc.innerHTML=`Trump <b class="${isRed(v.trumpSuit)?'red':''}">${SYM[v.trumpSuit]}</b> shown by ${v.revealedBy===null?'last trick':nm(v.revealedBy)}${v.seventhCard?' · 7th card: '+cs(v.seventhCard):''}`;}
@@ -229,7 +229,7 @@ async function doAct(seat,a){
   const b=game.s,done=a.type==='play'&&b.trick.length===(b.single?2:3)?[...b.trick,{seat,card:a.card}]:null;
   game.act(seat,a);
   if(game.s!==b){msg=game.s.notice||'New deal';offRender();await sleep(2600);}else msg=describe(seat,a);
-  if(done){shown=done;offRender();await sleep(1500);shown=null;}
+  if(done){shown=done;offRender();await sleep(1800);shown=null;}
   busy=false;
 }
 async function loop(){
@@ -252,7 +252,7 @@ function connect(){
   sock.on('room',r=>{room=r;my=r.you;if(!r.started){show('lobby');renderLobby();}});
   sock.on('state',st=>{
     mode='on';V=st.view;my=V.you;names=st.names;avs=st.avs;total=st.total;winner=st.winner;msg=st.ev||'';
-    if(st.lastTrick&&st.lastTrick.id!==lastId){lastId=st.lastTrick.id;shown=st.lastTrick.cards;clearTimeout(stimer);stimer=setTimeout(()=>{shown=null;render();},1500);}
+    if(st.lastTrick&&st.lastTrick.id!==lastId){lastId=st.lastTrick.id;shown=st.lastTrick.cards;lockUntil=Date.now()+1800;clearTimeout(stimer);stimer=setTimeout(()=>{shown=null;render();},1800);}
     show('game');render();
   });
   sock.on('err',m=>{msg=m;if(V)render();});
@@ -308,7 +308,7 @@ $('table').onclick=e=>{const s=e.target.closest('.seat');if(!s||mode!=='on')retu
 
 // ---------- input ----------
 function send(a){
-  if(busy||!V||V.turn!==my)return;marry=false;
+  if(busy||!V||V.turn!==my||Date.now()<lockUntil)return;marry=false;
   if(mode==='on')sock.emit('act',a);else doAct(my,a).then(loop);
 }
 $('actions').onclick=e=>{
@@ -321,7 +321,7 @@ $('actions').onclick=e=>{
   else if(k==='marry'){marry=!marry;render();}
 };
 $('hand').onclick=e=>{
-  const b=e.target.closest('button.card');if(!b||busy||V.turn!==my||V.phase!=='playing')return;
+  const b=e.target.closest('button.card');if(!b||busy||Date.now()<lockUntil||V.turn!==my||V.phase!=='playing')return;
   const c=sorted[+b.dataset.i];
   const L=V.legal.filter(a=>a.type==='play'&&E.sameCard(a.card,c));
   if(!L.length)return;
@@ -346,7 +346,7 @@ $('menu').onclick=e=>{
 };
 try{if(localStorage.n)$('name').value=localStorage.n;if(localStorage.a)myAv=Math.min(11,+localStorage.a||0)}catch(_){}
 drawAvs();
-if(IMG)setTimeout(()=>{for(const s of 'SHCD')for(const r of ['7','8','9','10','J','Q','K','A'])new Image().src=`cards/${s}-${r}.webp`;},400);
+if(IMG){window._pre=[];for(const s of 'SHCD')for(const r of ['7','8','9','10','J','Q','K','A']){const i=new Image();i.src=`cards/${s}-${r}.webp?v=${window.CARD_V||1}`;window._pre.push(i);}}
 if(typeof io==='undefined'){document.querySelectorAll('.net').forEach(x=>x.hidden=true);$('netnote').hidden=false;}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>

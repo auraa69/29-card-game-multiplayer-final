@@ -3,6 +3,7 @@ const express = require('express'), http = require('http'), { Server } = require
 const E = require('./engine.js'), { botMove } = require('./bot.js');
 
 const app = express();
+app.use('/cards', express.static(__dirname + '/public/cards', { maxAge: '30d', immutable: true }));   // card pictures: cache hard
 app.use(express.static(__dirname + '/public'));
 app.use('/.well-known', express.static(__dirname + '/public/.well-known', { dotfiles: 'allow' })); // for the APK (hides the URL bar)
 const srv = http.createServer(app), io = new Server(srv, { cors: { origin: '*' } });
@@ -46,7 +47,7 @@ function apply(r, seat, a) {
   if (g.s.phase === 'finished' && r.scored !== g.s.result) {
     r.scored = g.s.result; r.total[0] += g.s.result.delta[0]; r.total[1] += g.s.result.delta[1];
   }
-  r.wait = Date.now() + (done ? 1800 : g.s !== before ? 2600 : 0);
+  r.wait = Date.now() + (done ? 2300 : g.s !== before ? 2600 : 0);
   emitAll(r); pump(r);
 }
 
