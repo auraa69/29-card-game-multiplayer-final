@@ -1,4 +1,4 @@
-import { Game, Action } from './engine';
+import { Game, Action, strength } from './engine';
 
 function mulberry32(a: number) {
   return () => {
@@ -11,7 +11,7 @@ function mulberry32(a: number) {
 
 const rng = mulberry32(29);
 const pick = <T,>(xs: T[]) => xs[Math.floor(rng() * xs.length)];
-let singles = 0, stakes = 0, rounds = 0, revealed = 0, marriages = 0, bidderWins = 0;
+let jokers = 0, singles = 0, stakes = 0, rounds = 0, revealed = 0, marriages = 0, bidderWins = 0;
 
 for (let g = 0; g < 5000; g++) {
   const game = new Game(undefined, rng, (g % 4) as 0 | 1 | 2 | 3);
@@ -23,10 +23,16 @@ for (let g = 0; g < 5000; g++) {
     if (game.s.phase === 'bidding') a = rng() < 0.55 ? { type: 'pass' } : pick(legal);
     else if (game.s.phase === 'playing' && legal.some(x => x.type === 'reveal') && rng() < 0.7) a = { type: 'reveal' };
     else a = pick(legal.filter(x => x.type !== 'reveal') as Action[]);
+    const pre = game.s, pj = pre.joker && pre.phase === 'playing' && a.type === 'play' && pre.trick.length === (pre.single ? 2 : 3) ? [...pre.trick, { seat: pre.turn, card: (a as any).card }] : null;
     game.act(game.s.turn, a);
+    if (pj && game.s.phase === 'playing') {            // Joker: highest card of the led suit must win the trick
+      const led = pj[0].card.suit, best = pj.filter(p => p.card.suit === led).reduce((x, y) => strength(y.card.rank) > strength(x.card.rank) ? y : x);
+      if (game.s.turn !== best.seat) throw new Error('joker winner wrong');
+    }
   }
   const s = game.s;
   const r = s.result!;
+  if (s.joker) { jokers++; if (s.marriage !== null || s.trumpSuit !== null) throw new Error('joker rules'); }
   if (Math.abs(r.delta[r.bidTeam]) !== (s.single ? 4 : s.stake)) throw new Error('bad stake');
   if (s.single) { singles++; if (r.bidderWon !== (s.tricksWon[r.bidTeam] === 8)) throw new Error('single rule'); }
   else {
@@ -37,5 +43,5 @@ for (let g = 0; g < 5000; g++) {
   }
   rounds++; if (s.trumpRevealed) revealed++; if (s.marriage !== null) marriages++; if (s.result!.bidderWon) bidderWins++;
 }
-console.log({ singles, stakes, rounds, revealed, marriages, bidderWins });
+console.log({ jokers, singles, stakes, rounds, revealed, marriages, bidderWins });
 console.log('OK: 5000 random rounds, points always sum to 28, no illegal states');

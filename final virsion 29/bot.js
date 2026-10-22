@@ -13,7 +13,7 @@ function botMove(v){
     const sc={};v.hand.forEach(c=>sc[c.suit]=(sc[c.suit]||0)+E.strength(c.rank)+3);
     const best=Object.keys(sc).sort((a,b)=>sc[b]-sc[a])[0];
     const cnt={};v.hand.forEach(c=>cnt[c.suit]=(cnt[c.suit]||0)+1);
-    if(Math.max(...Object.values(cnt))<2)return {type:'setTrump',seventh:true};
+    if(Math.max(...Object.values(cnt))<2)return Math.random()<.5?{type:'setTrump',seventh:true}:{type:'setTrump',joker:true};
     return {type:'setTrump',suit:best};
   }
   if(v.phase==='single'){const t=v.hand.filter(c=>c.suit===v.trumpSuit);return {type:'single',on:t.length>=5&&t.some(c=>c.rank==='J')&&t.some(c=>c.rank==='9')};}

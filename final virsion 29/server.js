@@ -30,7 +30,7 @@ function desc(r, seat, a) {
   const n = r.seats[seat].name;
   if (a.type === 'bid') return `${n} bid ${a.amount}`;
   if (a.type === 'pass') return `${n} passed`;
-  if (a.type === 'setTrump') return `${n} set the hidden trump`;
+  if (a.type === 'setTrump') return a.joker ? `${n} chose JOKER: no trump, the led suit wins` : `${n} set the hidden trump`;
   if (a.type === 'single') return a.on ? `${n} goes SINGLE HAND, partner sits out` : `${n} plays with a partner`;
   if (a.type === 'double') return a.on ? `${n} calls DOUBLE!` : `${n} passes on double`;
   if (a.type === 'redouble') return a.on ? `${n} calls REDOUBLE!` : `${n} declines to redouble`;

@@ -85,7 +85,8 @@ var Game = class {
       single: false,
       stake: 1,
       sitOut: null,
-      queue: []
+      queue: [],
+      joker: false
     };
   }
   // ---------- queries ----------
@@ -106,7 +107,7 @@ var Game = class {
   }
   canDeclareMarriage(seat, card) {
     const s = this.s;
-    if (s.phase !== "playing" || !s.trumpRevealed || s.marriage !== null || s.single) return false;
+    if (s.phase !== "playing" || !s.trumpRevealed || s.marriage !== null || s.single || s.joker) return false;
     if (card.suit !== s.trumpSuit || card.rank !== "K" && card.rank !== "Q") return false;
     const other = card.rank === "K" ? "Q" : "K";
     if (!s.hands[seat].some((c) => c.suit === s.trumpSuit && c.rank === other)) return false;
@@ -119,6 +120,7 @@ var Game = class {
       for (let a = s.highBid + 1; a <= this.cfg.maxBid; a++) out.push({ type: "bid", amount: a });
     } else if (s.phase === "trump-select") {
       for (const suit of SUITS) out.push({ type: "setTrump", suit });
+      out.push({ type: "setTrump", joker: true });
       out.push({ type: "setTrump", seventh: true });
     } else if (s.phase === "single" || s.phase === "double" || s.phase === "redouble") {
       out.push({ type: s.phase, on: true }, { type: s.phase, on: false });
@@ -151,6 +153,7 @@ var Game = class {
       trumpSuit: s.trumpRevealed || seat === s.bidder ? s.trumpSuit : null,
       notice: s.notice,
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
+      joker: s.joker,
       single: s.single,
       stake: s.stake,
       sitOut: s.sitOut,
@@ -185,7 +188,10 @@ var Game = class {
       }
       case "setTrump": {
         if (s.phase !== "trump-select") throw new Error("Not trump selection");
-        if (!a.seventh) {
+        if (a.joker) {
+          s.joker = true;
+          s.trumpRevealed = true;
+        } else if (!a.seventh) {
           if (!a.suit || !SUITS.includes(a.suit)) throw new Error("Bad suit");
           s.trumpSuit = a.suit;
         }
@@ -298,6 +304,7 @@ var Game = class {
     const s = this.s, bt = teamOf(s.bidder);
     if (s.hands.some((h) => h.every((c) => cardPoints(c) === 0))) return "A player has no point cards, so the cards are reshuffled";
     if (s.hands.some((h) => h.filter((c) => c.rank === "J").length === 4)) return "A player has all four Jacks, so the cards are reshuffled";
+    if (s.joker) return "";
     const oppHasTrump = s.hands.some((h, i) => teamOf(i) !== bt && h.some((c) => c.suit === s.trumpSuit));
     return oppHasTrump ? "" : "The opponents have no trump card, so the cards are reshuffled";
   }
@@ -343,7 +350,7 @@ var Game = class {
     const delta = [0, 0];
     const amount = s.single ? 4 : s.stake;
     delta[bt] = won ? amount : -amount;
-    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage, single: s.single, stake: s.stake, amount };
+    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage, single: s.single, stake: s.stake, amount, joker: s.joker };
     s.phase = "finished";
   }
 };

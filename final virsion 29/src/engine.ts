@@ -30,7 +30,7 @@ export type Phase = 'bidding' | 'trump-select' | 'single' | 'double' | 'redouble
 export type Action =
   | { type: 'bid'; amount: number }
   | { type: 'pass' }
-  | { type: 'setTrump'; suit?: Suit; seventh?: boolean }               // bidder names the trump suit (secret until revealed)
+  | { type: 'setTrump'; suit?: Suit; seventh?: boolean; joker?: boolean }               // bidder names the trump suit (secret until revealed)
   | { type: 'single'; on: boolean } | { type: 'double'; on: boolean } | { type: 'redouble'; on: boolean }
   | { type: 'reveal' }                              // void in led suit: ask to see trump
   | { type: 'play'; card: Card; declareMarriage?: boolean };
@@ -40,7 +40,7 @@ export interface RoundResult {
   points: [number, number]; bidderWon: boolean;
   delta: [number, number]; // game-point change per team (bidding team +1 / -1)
   marriage: Team | null;
-  single: boolean; stake: number; amount: number; // amount = game points won/lost by the bidding team
+  single: boolean; stake: number; amount: number; joker: boolean; // amount = game points won/lost by the bidding team
 }
 
 interface State {
@@ -53,7 +53,7 @@ interface State {
   trick: { seat: Seat; card: Card }[]; ledSuit: Suit | null;
   tricksWon: [number, number]; points: [number, number]; tricksPlayed: number;
   marriage: Team | null; result: RoundResult | null; notice: string;
-  single: boolean; stake: number; sitOut: Seat | null; queue: Seat[];
+  single: boolean; stake: number; sitOut: Seat | null; queue: Seat[]; joker: boolean;
 }
 
 export class Game {
@@ -81,7 +81,7 @@ export class Game {
       trumpSuit: null, seventhCard: null, trumpRevealed: false, revealAsked: false, revealedBy: null,
       trick: [], ledSuit: null,
       tricksWon: [0, 0], points: [0, 0], tricksPlayed: 0,
-      marriage: null, result: null, notice, single: false, stake: 1, sitOut: null, queue: [],
+      marriage: null, result: null, notice, single: false, stake: 1, sitOut: null, queue: [], joker: false,
     };
   }
 
@@ -106,7 +106,7 @@ export class Game {
 
   canDeclareMarriage(seat: Seat, card: Card): boolean {
     const s = this.s;
-    if (s.phase !== 'playing' || !s.trumpRevealed || s.marriage !== null || s.single) return false;
+    if (s.phase !== 'playing' || !s.trumpRevealed || s.marriage !== null || s.single || s.joker) return false;
     if (card.suit !== s.trumpSuit || (card.rank !== 'K' && card.rank !== 'Q')) return false;
     const other: Rank = card.rank === 'K' ? 'Q' : 'K';
     if (!s.hands[seat].some(c => c.suit === s.trumpSuit && c.rank === other)) return false;
@@ -120,6 +120,7 @@ export class Game {
       for (let a = s.highBid + 1; a <= this.cfg.maxBid; a++) out.push({ type: 'bid', amount: a });
     } else if (s.phase === 'trump-select') {
       for (const suit of SUITS) out.push({ type: 'setTrump', suit });
+      out.push({ type: 'setTrump', joker: true });   // Joker: no trump, the led suit wins
       out.push({ type: 'setTrump', seventh: true }); // let the bidder's 7th card decide
     } else if (s.phase === 'single' || s.phase === 'double' || s.phase === 'redouble') {
       out.push({ type: s.phase, on: true }, { type: s.phase, on: false });
@@ -145,7 +146,7 @@ export class Game {
       trumpSuit: s.trumpRevealed || seat === s.bidder ? s.trumpSuit : null,
       notice: s.notice,
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
-      single: s.single, stake: s.stake, sitOut: s.sitOut, trickSize: s.single ? 3 : 4,
+      joker: s.joker, single: s.single, stake: s.stake, sitOut: s.sitOut, trickSize: s.single ? 3 : 4,
       trick: s.trick, ledSuit: s.ledSuit,
       tricksWon: s.tricksWon, marriage: s.marriage,
       points: s.phase === 'finished' ? s.points : null,
@@ -175,7 +176,8 @@ export class Game {
       }
       case 'setTrump': {
         if (s.phase !== 'trump-select') throw new Error('Not trump selection');
-        if (!a.seventh) {
+        if (a.joker) { s.joker = true; s.trumpRevealed = true; }   // no trump: highest card of the led suit wins
+        else if (!a.seventh) {
           if (!a.suit || !SUITS.includes(a.suit)) throw new Error('Bad suit');
           s.trumpSuit = a.suit;
         }
@@ -249,6 +251,7 @@ export class Game {
     const s = this.s, bt = teamOf(s.bidder!);
     if (s.hands.some(h => h.every(c => cardPoints(c) === 0))) return 'A player has no point cards, so the cards are reshuffled';
     if (s.hands.some(h => h.filter(c => c.rank === 'J').length === 4)) return 'A player has all four Jacks, so the cards are reshuffled';
+    if (s.joker) return '';
     const oppHasTrump = s.hands.some((h, i) => teamOf(i as Seat) !== bt && h.some(c => c.suit === s.trumpSuit));
     return oppHasTrump ? '' : 'The opponents have no trump card, so the cards are reshuffled';
   }
@@ -295,7 +298,7 @@ export class Game {
     const delta: [number, number] = [0, 0];
     const amount = s.single ? 4 : s.stake;
     delta[bt] = won ? amount : -amount;
-    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage, single: s.single, stake: s.stake, amount };
+    s.result = { bidTeam: bt, bid: s.bid, target, points: s.points, bidderWon: won, delta, marriage: s.marriage, single: s.single, stake: s.stake, amount, joker: s.joker };
     s.phase = 'finished';
   }
 }
