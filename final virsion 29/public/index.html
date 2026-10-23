@@ -43,6 +43,7 @@ h2{font:700 22px Georgia,serif;margin:0 0 8px}
 #pTrump .card{--cw:44px}
 #center{position:absolute;top:31%;left:50%;transform:translateX(-50%);display:grid;grid-template-columns:repeat(3,var(--tc));grid-template-rows:repeat(3,calc(var(--tc)*.72));gap:4px;z-index:2}
 #center>div{display:flex;justify-content:center;align-items:flex-start}
+#center .card{--cw:var(--tc);width:var(--tc);height:calc(var(--tc)*1.4);box-shadow:0 4px 8px rgba(0,0,0,.5);transition:transform .5s ease-in,opacity .5s ease-in}
 .p2{grid-area:1/2}.p1{grid-area:2/3}.p3{grid-area:2/1}.p0{grid-area:3/2}
 #panel{position:absolute;top:30%;left:50%;transform:translateX(-50%);z-index:4;background:rgba(32,18,8,.84);border:2px solid #c28a4b;border-radius:14px;padding:8px 9px;min-width:190px;box-shadow:0 10px 22px rgba(0,0,0,.65);text-align:center}
 #panel.low{top:auto;bottom:4%}
@@ -84,6 +85,8 @@ input{background:rgba(0,0,0,.3);color:var(--ink);border:1px solid var(--mute);bo
 #ov{background:var(--wood2);border:2px solid var(--brass);border-radius:16px;padding:22px;max-width:340px;text-align:center}
 #ov p,.sub{margin:6px 0 14px;color:var(--mute)}
 small.note{display:block;margin-top:14px;color:var(--mute);font-size:12px}
+#center.sw0 .card{transform:translate(0,190px) scale(.45);opacity:0}#center.sw1 .card{transform:translate(190px,0) scale(.45);opacity:0}
+#center.sw2 .card{transform:translate(0,-190px) scale(.45);opacity:0}#center.sw3 .card{transform:translate(-190px,0) scale(.45);opacity:0}
 @media (prefers-reduced-motion:reduce){button.card{transition:none}}
 </style></head>
 <body><div id="app">
@@ -113,7 +116,7 @@ small.note{display:block;margin-top:14px;color:var(--mute);font-size:12px}
    <div class="seat" id="s2"></div><div class="seat" id="s1"></div><div class="seat" id="s3"></div>
   </div>
  </div>
- <div id="me"><span class="av" id="meav"></span><div><b id="mename"></b><small id="mesub"></small></div><span class="sp"></span><button class="act alt" id="mic" hidden>🎤 Hold to talk</button><button class="act alt" id="mute" hidden aria-label="Mute everyone">🔊</button></div>
+ <div id="me"><span class="av" id="meav"></span><div><b id="mename"></b><small id="mesub"></small></div><span class="sp"></span><button class="act alt" id="snd" aria-label="Sound on or off">🔔</button><button class="act alt" id="mic" hidden>🎤 Hold to talk</button><button class="act alt" id="mute" hidden aria-label="Mute everyone">🔊</button></div>
  <div id="msg"></div><div id="hand"></div>
  <small class="note">You and the player across from you are partners. Trump stays hidden until someone with no card of the led suit chooses to ask for it. With Joker there is no trump: the highest card of the led suit wins. Tap a player to mute their voice.</small>
 </section>
@@ -122,7 +125,7 @@ small.note{display:block;margin-top:14px;color:var(--mute);font-size:12px}
 <script src="config.js"></script>
 <script>document.write('<script src="'+(window.SERVER_URL||'')+'/socket.io/socket.io.js"><\/script>')</script>
 <script>
-var Engine=(()=>{var d=Object.defineProperty;var b=Object.getOwnPropertyDescriptor;var k=Object.getOwnPropertyNames;var S=Object.prototype.hasOwnProperty;var v=(n,e)=>{for(var t in e)d(n,t,{get:e[t],enumerable:!0})},y=(n,e,t,r)=>{if(e&&typeof e=="object"||typeof e=="function")for(let i of k(e))!S.call(n,i)&&i!==t&&d(n,i,{get:()=>e[i],enumerable:!(r=b(e,i))||r.enumerable});return n};var w=n=>y(d({},"__esModule",{value:!0}),n);var x={};v(x,{DEFAULT_CONFIG:()=>g,Game:()=>m,RANKS_HIGH_TO_LOW:()=>f,SUITS:()=>l,cardPoints:()=>p,gameWinner:()=>R,nextSeat:()=>o,sameCard:()=>c,strength:()=>h,teamOf:()=>u});var l=["S","H","D","C"],f=["J","9","A","10","K","Q","8","7"],B={J:3,9:2,A:1,10:1,K:0,Q:0,8:0,7:0},h=n=>7-f.indexOf(n),p=n=>B[n.rank],u=n=>n%2,o=n=>(n+1)%4,c=(n,e)=>n.suit===e.suit&&n.rank===e.rank,g={minBid:16,maxBid:28,marriageAdjust:4,marriageNeedsTrick:!0},m=class{constructor(e=g,t=Math.random,r=0){this.cfg=e;this.rng=t;this.startRound(r)}cfg;rng;s;startRound(e,t=""){let r=[];for(let s of l)for(let a of f)r.push({suit:s,rank:a});for(let s=r.length-1;s>0;s--){let a=Math.floor(this.rng()*(s+1));[r[s],r[a]]=[r[a],r[s]]}let i=[0,1,2,3].map(s=>r.slice(s*4,s*4+4));this.s={phase:"bidding",dealer:e,turn:o(e),hands:i,stock:r.slice(16),highBid:this.cfg.minBid-1,highBidder:null,passed:[!1,!1,!1,!1],bidder:null,bid:0,trumpSuit:null,seventhCard:null,trumpRevealed:!1,revealAsked:!1,revealedBy:null,trick:[],ledSuit:null,tricksWon:[0,0],points:[0,0],tricksPlayed:0,marriage:null,result:null,notice:t,single:!1,stake:1,sitOut:null,queue:[],joker:!1}}playable(e){let t=this.s,r=t.hands[e];if(!t.trick.length)return r;let i=r.filter(s=>s.suit===t.ledSuit);if(i.length)return i;if(t.revealAsked){let s=r.filter(a=>a.suit===t.trumpSuit);if(s.length)return s}return r}canAskReveal(e){let t=this.s;return t.phase==="playing"&&e===t.turn&&t.trick.length>0&&!t.trumpRevealed&&!t.hands[e].some(r=>r.suit===t.ledSuit)}canDeclareMarriage(e,t){let r=this.s;if(r.phase!=="playing"||!r.trumpRevealed||r.marriage!==null||r.single||r.joker||t.suit!==r.trumpSuit||t.rank!=="K"&&t.rank!=="Q")return!1;let i=t.rank==="K"?"Q":"K";return r.hands[e].some(s=>s.suit===r.trumpSuit&&s.rank===i)?!this.cfg.marriageNeedsTrick||r.tricksWon[u(e)]>0:!1}legalActions(){let e=this.s,t=e.turn,r=[];if(e.phase==="bidding"){r.push({type:"pass"});for(let i=e.highBid+1;i<=this.cfg.maxBid;i++)r.push({type:"bid",amount:i})}else if(e.phase==="trump-select"){for(let i of l)r.push({type:"setTrump",suit:i});r.push({type:"setTrump",joker:!0}),r.push({type:"setTrump",seventh:!0})}else if(e.phase==="single"||e.phase==="double"||e.phase==="redouble")r.push({type:e.phase,on:!0},{type:e.phase,on:!1});else if(e.phase==="playing"){this.canAskReveal(t)&&r.push({type:"reveal"});for(let i of this.playable(t))r.push({type:"play",card:i}),this.canDeclareMarriage(t,i)&&r.push({type:"play",card:i,declareMarriage:!0})}return r}view(e){let t=this.s;return{phase:t.phase,turn:t.turn,dealer:t.dealer,you:e,hand:t.hands[e],handSizes:t.hands.map(r=>r.length),highBid:t.highBid,highBidder:t.highBidder,passed:t.passed,bidder:t.bidder,bid:t.bid,trumpRevealed:t.trumpRevealed,revealedBy:t.revealedBy,trumpSuit:t.trumpRevealed||e===t.bidder?t.trumpSuit:null,notice:t.notice,seventhCard:e===t.bidder||t.trumpRevealed?t.seventhCard:null,joker:t.joker,single:t.single,stake:t.stake,sitOut:t.sitOut,trickSize:t.single?3:4,trick:t.trick,ledSuit:t.ledSuit,tricksWon:t.tricksWon,marriage:t.marriage,points:t.phase==="finished"?t.points:null,result:t.result,legal:e===t.turn?this.legalActions():[]}}act(e,t){let r=this.s;if(r.phase==="finished")throw new Error("Round is over");if(e!==r.turn)throw new Error("Not your turn");switch(t.type){case"bid":{if(r.phase!=="bidding")throw new Error("Not bidding phase");if(!Number.isInteger(t.amount)||t.amount<=r.highBid||t.amount>this.cfg.maxBid)throw new Error("Illegal bid");return r.highBid=t.amount,r.highBidder=e,this.advanceBidding()}case"pass":{if(r.phase!=="bidding")throw new Error("Not bidding phase");return r.passed[e]=!0,this.advanceBidding()}case"setTrump":{if(r.phase!=="trump-select")throw new Error("Not trump selection");if(t.joker)r.joker=!0,r.trumpRevealed=!0;else if(!t.seventh){if(!t.suit||!l.includes(t.suit))throw new Error("Bad suit");r.trumpSuit=t.suit}for(let s=1;s<=4;s++){let a=(r.dealer+s)%4;r.hands[a].push(...r.stock.splice(0,4))}t.seventh&&(r.seventhCard=r.hands[r.bidder][6],r.trumpSuit=r.seventhCard.suit);let i=this.badDeal();if(i){this.startRound(r.dealer,i);return}r.phase="single",r.turn=r.bidder;return}case"single":{if(r.phase!=="single")throw new Error("Not the single-hand decision");t.on?(r.single=!0,r.sitOut=(r.bidder+2)%4,r.hands[r.sitOut]=[],this.beginPlay()):this.beginPlay();return}case"double":{if(r.phase!=="double")throw new Error("Not the double decision");t.on?(r.stake=2,this.askRedouble()):this.nextAsk();return}case"redouble":{if(r.phase!=="redouble")throw new Error("Not the redouble decision");t.on?(r.stake=4,this.toTrump()):this.nextAsk();return}case"reveal":{if(!this.canAskReveal(e))throw new Error("Cannot ask for trump now");r.trumpRevealed=!0,r.revealAsked=!0,r.revealedBy=e;return}case"play":{if(r.phase!=="playing")throw new Error("Not playing phase");let i=r.hands[e],s=i.findIndex(a=>c(a,t.card));if(s<0)throw new Error("Card not in hand");if(!this.playable(e).some(a=>c(a,t.card)))throw new Error("Must follow suit");if(t.declareMarriage){if(!this.canDeclareMarriage(e,t.card))throw new Error("Cannot declare marriage");r.marriage=u(e)}i.splice(s,1),r.trick.length||(r.ledSuit=t.card.suit),r.trick.push({seat:e,card:t.card}),r.revealAsked=!1,r.trick.length===(r.single?3:4)?this.finishTrick():r.turn=this.nextPlayer(e);return}}}nextPlayer(e){let t=o(e);return t===this.s.sitOut&&(t=o(t)),t}beginPlay(){let e=this.s;e.phase="playing",e.turn=o(e.bidder)}toTrump(){let e=this.s;e.phase="trump-select",e.turn=e.bidder}askDouble(){let e=this.s,t=e.bidder;e.phase="double",e.queue=[o(t),(t+3)%4],e.turn=e.queue[0]}askRedouble(){let e=this.s,t=e.bidder;e.phase="redouble",e.queue=[t,(t+2)%4],e.turn=e.queue[0]}nextAsk(){let e=this.s;e.queue.shift(),e.queue.length?e.turn=e.queue[0]:this.toTrump()}badDeal(){let e=this.s,t=u(e.bidder);return e.hands.some(i=>i.every(s=>p(s)===0))?"A player has no point cards, so the cards are reshuffled":e.hands.some(i=>i.filter(s=>s.rank==="J").length===4)?"A player has all four Jacks, so the cards are reshuffled":e.joker||e.hands.some((i,s)=>u(s)!==t&&i.some(a=>a.suit===e.trumpSuit))?"":"The opponents have no trump card, so the cards are reshuffled"}advanceBidding(){let e=this.s,t=[0,1,2,3].filter(r=>!e.passed[r]);if(e.highBidder!==null&&(t.length===1||e.highBid===this.cfg.maxBid))e.bidder=e.highBidder,e.bid=e.highBid,this.askDouble();else if(e.highBidder===null&&t.length<=1)this.startRound(e.dealer,"Three players passed, so the cards are reshuffled");else{let r=o(e.turn);for(;e.passed[r];)r=o(r);e.turn=r}}trickWinner(){let e=this.s,t=e.trumpRevealed?e.trick.filter(i=>i.card.suit===e.trumpSuit):[];return(t.length?t:e.trick.filter(i=>i.card.suit===e.ledSuit)).reduce((i,s)=>h(s.card.rank)>h(i.card.rank)?s:i).seat}finishTrick(){let e=this.s,t=this.trickWinner(),r=u(t);e.points[r]+=e.trick.reduce((i,s)=>i+p(s.card),0),e.tricksWon[r]++,e.tricksPlayed++,e.trick=[],e.ledSuit=null,e.turn=t,(e.tricksPlayed===8||e.single&&r!==u(e.bidder))&&this.finishRound()}finishRound(){let e=this.s,t=u(e.bidder),r=e.bid;e.marriage===t?r=Math.max(this.cfg.minBid,r-this.cfg.marriageAdjust):e.marriage!==null&&(r=Math.min(this.cfg.maxBid,r+this.cfg.marriageAdjust));let i=e.single?e.tricksWon[t]===8:e.points[t]>=r,s=[0,0],a=e.single?4:e.stake;s[t]=i?a:-a,e.result={bidTeam:t,bid:e.bid,target:r,points:e.points,bidderWon:i,delta:s,marriage:e.marriage,single:e.single,stake:e.stake,amount:a,joker:e.joker},e.phase="finished"}};function R(n){return n[0]>=6||n[1]<=-6?0:n[1]>=6||n[0]<=-6?1:null}return w(x);})();
+var Engine=(()=>{var d=Object.defineProperty;var b=Object.getOwnPropertyDescriptor;var k=Object.getOwnPropertyNames;var S=Object.prototype.hasOwnProperty;var y=(n,t)=>{for(var r in t)d(n,r,{get:t[r],enumerable:!0})},v=(n,t,r,e)=>{if(t&&typeof t=="object"||typeof t=="function")for(let s of k(t))!S.call(n,s)&&s!==r&&d(n,s,{get:()=>t[s],enumerable:!(e=b(t,s))||e.enumerable});return n};var w=n=>v(d({},"__esModule",{value:!0}),n);var C={};y(C,{DEFAULT_CONFIG:()=>m,Game:()=>g,RANKS_HIGH_TO_LOW:()=>f,SUITS:()=>o,cardPoints:()=>p,gameWinner:()=>x,nextSeat:()=>l,sameCard:()=>c,strength:()=>h,teamOf:()=>u});var o=["S","H","D","C"],f=["J","9","A","10","K","Q","8","7"],B={J:3,9:2,A:1,10:1,K:0,Q:0,8:0,7:0},h=n=>7-f.indexOf(n),p=n=>B[n.rank],u=n=>n%2,l=n=>(n+1)%4,c=(n,t)=>n.suit===t.suit&&n.rank===t.rank,m={minBid:16,maxBid:28,marriageAdjust:4,marriageNeedsTrick:!0},g=class{constructor(t=m,r=Math.random,e=0){this.cfg=t;this.rng=r;this.startRound(e)}cfg;rng;s;startRound(t,r=""){let e=[];for(let i of o)for(let a of f)e.push({suit:i,rank:a});for(let i=e.length-1;i>0;i--){let a=Math.floor(this.rng()*(i+1));[e[i],e[a]]=[e[a],e[i]]}let s=[0,1,2,3].map(i=>e.slice(i*4,i*4+4));this.s={phase:"bidding",dealer:t,turn:l(t),hands:s,stock:e.slice(16),highBid:this.cfg.minBid-1,highBidder:null,passed:[!1,!1,!1,!1],bidder:null,bid:0,trumpSuit:null,seventhCard:null,trumpRevealed:!1,revealAsked:!1,revealedBy:null,trick:[],ledSuit:null,tricksWon:[0,0],points:[0,0],tricksPlayed:0,marriage:null,result:null,notice:r,single:!1,stake:1,sitOut:null,queue:[],joker:!1,challenger:null,resp:!1}}playable(t){let r=this.s,e=r.hands[t];if(!r.trick.length)return e;let s=e.filter(i=>i.suit===r.ledSuit);if(s.length)return s;if(r.revealAsked){let i=e.filter(a=>a.suit===r.trumpSuit);if(i.length)return i}return e}canAskReveal(t){let r=this.s;return r.phase==="playing"&&t===r.turn&&r.trick.length>0&&!r.trumpRevealed&&!r.hands[t].some(e=>e.suit===r.ledSuit)}canDeclareMarriage(t,r){let e=this.s;if(e.phase!=="playing"||!e.trumpRevealed||e.marriage!==null||e.single||e.joker||r.suit!==e.trumpSuit||r.rank!=="K"&&r.rank!=="Q")return!1;let s=r.rank==="K"?"Q":"K";return e.hands[t].some(i=>i.suit===e.trumpSuit&&i.rank===s)?!this.cfg.marriageNeedsTrick||e.tricksWon[u(t)]>0:!1}legalActions(){let t=this.s,r=t.turn,e=[];if(t.phase==="bidding")if(t.resp)e.push({type:"match"},{type:"pass"});else{e.push({type:"pass"});for(let s=t.highBid+1;s<=this.cfg.maxBid;s++)e.push({type:"bid",amount:s})}else if(t.phase==="trump-select"){for(let s of o)e.push({type:"setTrump",suit:s});e.push({type:"setTrump",joker:!0}),e.push({type:"setTrump",seventh:!0})}else if(t.phase==="single"||t.phase==="double"||t.phase==="redouble")e.push({type:t.phase,on:!0},{type:t.phase,on:!1});else if(t.phase==="playing"){this.canAskReveal(r)&&e.push({type:"reveal"});for(let s of this.playable(r))e.push({type:"play",card:s}),this.canDeclareMarriage(r,s)&&e.push({type:"play",card:s,declareMarriage:!0})}return e}view(t){let r=this.s;return{phase:r.phase,turn:r.turn,dealer:r.dealer,you:t,hand:r.hands[t],handSizes:r.hands.map(e=>e.length),highBid:r.highBid,highBidder:r.highBidder,passed:r.passed,bidder:r.bidder,bid:r.bid,trumpRevealed:r.trumpRevealed,revealedBy:r.revealedBy,trumpSuit:r.trumpRevealed||t===r.bidder?r.trumpSuit:null,notice:r.notice,seventhCard:t===r.bidder||r.trumpRevealed?r.seventhCard:null,challenger:r.challenger,resp:r.resp,joker:r.joker,single:r.single,stake:r.stake,sitOut:r.sitOut,trickSize:r.single?3:4,trick:r.trick,ledSuit:r.ledSuit,tricksWon:r.tricksWon,marriage:r.marriage,points:r.phase==="finished"?r.points:null,result:r.result,legal:t===r.turn?this.legalActions():[]}}act(t,r){let e=this.s;if(e.phase==="finished")throw new Error("Round is over");if(t!==e.turn)throw new Error("Not your turn");switch(r.type){case"bid":{if(e.phase!=="bidding"||e.resp)throw new Error("Cannot bid now");if(!Number.isInteger(r.amount)||r.amount<=e.highBid||r.amount<this.cfg.minBid||r.amount>this.cfg.maxBid)throw new Error("Illegal bid");e.highBidder===null?(e.highBid=r.amount,e.highBidder=t,this.setChallenger(t)):(e.highBid=r.amount,e.resp=!0,e.challenger=t,e.turn=e.highBidder);return}case"match":{if(e.phase!=="bidding"||!e.resp)throw new Error("Nothing to match");e.resp=!1;let s=e.challenger;e.highBid>=this.cfg.maxBid?(e.passed[s]=!0,this.setChallenger(s)):e.turn=s;return}case"pass":{if(e.phase!=="bidding")throw new Error("Not bidding phase");if(e.resp)e.passed[t]=!0,e.highBidder=e.challenger,e.resp=!1,this.setChallenger(e.challenger);else if(e.highBidder===null){if(e.passed[t]=!0,e.passed.filter(Boolean).length>=3){this.startRound(e.dealer,"Three players passed, so the cards are reshuffled");return}let s=l(t);for(;e.passed[s];)s=l(s);e.turn=s}else e.passed[t]=!0,this.setChallenger(t);return}case"setTrump":{if(e.phase!=="trump-select")throw new Error("Not trump selection");if(r.joker)e.joker=!0,e.trumpRevealed=!0;else if(!r.seventh){if(!r.suit||!o.includes(r.suit))throw new Error("Bad suit");e.trumpSuit=r.suit}for(let i=1;i<=4;i++){let a=(e.dealer+i)%4;e.hands[a].push(...e.stock.splice(0,4))}r.seventh&&(e.seventhCard=e.hands[e.bidder][6],e.trumpSuit=e.seventhCard.suit);let s=this.badDeal();if(s){this.startRound(e.dealer,s);return}e.phase="single",e.turn=e.bidder;return}case"single":{if(e.phase!=="single")throw new Error("Not the single-hand decision");r.on?(e.single=!0,e.sitOut=(e.bidder+2)%4,e.hands[e.sitOut]=[],this.beginPlay()):this.beginPlay();return}case"double":{if(e.phase!=="double")throw new Error("Not the double decision");r.on?(e.stake=2,this.askRedouble()):this.nextAsk();return}case"redouble":{if(e.phase!=="redouble")throw new Error("Not the redouble decision");r.on?(e.stake=4,this.toTrump()):this.nextAsk();return}case"reveal":{if(!this.canAskReveal(t))throw new Error("Cannot ask for trump now");e.trumpRevealed=!0,e.revealAsked=!0,e.revealedBy=t;return}case"play":{if(e.phase!=="playing")throw new Error("Not playing phase");let s=e.hands[t],i=s.findIndex(a=>c(a,r.card));if(i<0)throw new Error("Card not in hand");if(!this.playable(t).some(a=>c(a,r.card)))throw new Error("Must follow suit");if(r.declareMarriage){if(!this.canDeclareMarriage(t,r.card))throw new Error("Cannot declare marriage");e.marriage=u(t)}s.splice(i,1),e.trick.length||(e.ledSuit=r.card.suit),e.trick.push({seat:t,card:r.card}),e.revealAsked=!1,e.trick.length===(e.single?3:4)?this.finishTrick():e.turn=this.nextPlayer(t);return}}}nextPlayer(t){let r=l(t);return r===this.s.sitOut&&(r=l(r)),r}beginPlay(){let t=this.s;t.phase="playing",t.turn=l(t.bidder)}toTrump(){let t=this.s;t.phase="trump-select",t.turn=t.bidder}askDouble(){let t=this.s,r=t.bidder;t.phase="double",t.queue=[l(r),(r+3)%4],t.turn=t.queue[0]}askRedouble(){let t=this.s,r=t.bidder;t.phase="redouble",t.queue=[r,(r+2)%4],t.turn=t.queue[0]}nextAsk(){let t=this.s;t.queue.shift(),t.queue.length?t.turn=t.queue[0]:this.toTrump()}badDeal(){let t=this.s,r=u(t.bidder);return t.hands.some(s=>s.every(i=>p(i)===0))?"A player has no point cards, so the cards are reshuffled":t.hands.some(s=>s.filter(i=>i.rank==="J").length===4)?"A player has all four Jacks, so the cards are reshuffled":t.joker||t.hands.some((s,i)=>u(i)!==r&&s.some(a=>a.suit===t.trumpSuit))?"":"The opponents have no trump card, so the cards are reshuffled"}nextChallenger(t){let r=this.s,e=t;for(let s=0;s<4;s++)if(e=l(e),e!==r.highBidder&&!r.passed[e])return e;return null}setChallenger(t){let r=this.s,e=this.nextChallenger(t);for(;e!==null&&r.highBid>=this.cfg.maxBid;)r.passed[e]=!0,e=this.nextChallenger(e);if(e===null){this.endBidding();return}r.challenger=e,r.turn=e,r.resp=!1}endBidding(){let t=this.s;t.bidder=t.highBidder,t.bid=t.highBid,t.resp=!1,this.askDouble()}trickWinner(){let t=this.s,r=t.trumpRevealed?t.trick.filter(s=>s.card.suit===t.trumpSuit):[];return(r.length?r:t.trick.filter(s=>s.card.suit===t.ledSuit)).reduce((s,i)=>h(i.card.rank)>h(s.card.rank)?i:s).seat}finishTrick(){let t=this.s,r=this.trickWinner(),e=u(r);t.points[e]+=t.trick.reduce((s,i)=>s+p(i.card),0),t.tricksWon[e]++,t.tricksPlayed++,t.trick=[],t.ledSuit=null,t.turn=r,(t.tricksPlayed===8||t.single&&e!==u(t.bidder))&&this.finishRound()}finishRound(){let t=this.s,r=u(t.bidder),e=t.bid;t.marriage===r?e=Math.max(this.cfg.minBid,e-this.cfg.marriageAdjust):t.marriage!==null&&(e=Math.min(this.cfg.maxBid,e+this.cfg.marriageAdjust));let s=t.single?t.tricksWon[r]===8:t.points[r]>=e,i=[0,0],a=t.single?4:t.stake;i[r]=s?a:-a,t.result={bidTeam:r,bid:t.bid,target:e,points:t.points,bidderWon:s,delta:i,marriage:t.marriage,single:t.single,stake:t.stake,amount:a,joker:t.joker},t.phase="finished"}};function x(n){return n[0]>=6||n[1]<=-6?0:n[1]>=6||n[0]<=-6?1:null}return w(C);})();
 
 </script>
 <script>
@@ -135,8 +138,10 @@ function winnerOf(trick,led,trump){
 function botMove(v){
   const seat=v.you,L=v.legal;
   if(v.phase==='bidding'){
-    const val=v.hand.reduce((n,c)=>n+E.cardPoints(c),0),next=v.highBid+1;
-    return next<=Math.min(15+val,24)?{type:'bid',amount:next}:{type:'pass'};
+    const val=v.hand.reduce((n,c)=>n+E.cardPoints(c),0),cap=Math.min(15+val,24);
+    if(v.resp)return v.highBid<=cap?{type:'match'}:{type:'pass'};   // holder: match a raise if still happy
+    const next=v.highBid+1;
+    return next<=cap?{type:'bid',amount:next}:{type:'pass'};
   }
   if(v.phase==='trump-select'){
     const sc={};v.hand.forEach(c=>sc[c.suit]=(sc[c.suit]||0)+E.strength(c.rank)+3);
@@ -170,9 +175,24 @@ function botMove(v){
 
 
 let mode=null,V=null,my=0,names=['You','Right','Partner','Left'],avs=[0,10,10,10],total=[0,0],winner=null,busy=false,msg='',shown=null,marry=false,sorted=[],game=null,scored=null,sock=null,room=null,rc=null,myName='Player',myAv=0,lastId=0,stimer=null;
-let lockUntil=0,talking=null,rec=null,holding=false,recTimer=null,allMute=false,vq=[],vplaying=false,pending=null;const muted=new Set();
+let lockUntil=0,shownWin=0,swipe=false,centerKey='',soundOn=true,lastActId=null,AC=null,stimer2=null,talking=null,rec=null,holding=false,recTimer=null,allMute=false,vq=[],vplaying=false,pending=null;const muted=new Set();
 let tok;try{tok=localStorage.t||(localStorage.t=Math.random().toString(36).slice(2))}catch(_){tok=Math.random().toString(36).slice(2)}
 const $=id=>document.getElementById(id),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function sfx(k){if(!soundOn)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.connect(g);g.connect(AC.destination);
+  if(k==='play'){o.type='square';o.frequency.setValueAtTime(180,t);g.gain.setValueAtTime(.07,t);g.gain.exponentialRampToValueAtTime(.001,t+.07);o.start(t);o.stop(t+.08);}
+  else{o.type='triangle';o.frequency.setValueAtTime(700,t);o.frequency.exponentialRampToValueAtTime(140,t+.4);g.gain.setValueAtTime(.12,t);g.gain.exponentialRampToValueAtTime(.001,t+.45);o.start(t);o.stop(t+.46);}}catch(_){}}
+function say(text){if(!soundOn||!('speechSynthesis' in window))return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=1.05;speechSynthesis.speak(u);}catch(_){}}
+function sayAct(a,highBid){
+  if(a.type==='bid')say(String(a.amount));
+  else if(a.type==='match')say('Match '+highBid);
+  else if(a.type==='pass')say('Pass');
+  else if(a.type==='double'&&a.on)say('Double');
+  else if(a.type==='redouble'&&a.on)say('Redouble');
+  else if(a.type==='single'&&a.on)say('Single hand');
+  else if(a.type==='setTrump'&&a.joker)say('Joker');
+  else if(a.type==='reveal')say('Trump revealed');
+  else if(a.type==='play'){sfx('play');if(a.declareMarriage)say('Marriage');}
+}
 const seatOf=r=>(my+r)%4,nm=k=>k===my?'You':names[k],cs=c=>c.rank+SYM[c.suit];
 const isRed=s=>s==='H'||s==='D',face=k=>AVS[avs[k]]||'🙂';
 const IMG=!!window.CARD_IMAGES;   // custom card art (set in config.js)
@@ -206,17 +226,20 @@ function render(){
   $('mesub').textContent=(v.dealer===my?'dealer':'')+(v.sitOut===my?' · sitting out this hand':'');
   $('mic').hidden=$('mute').hidden=mode!=='on';
   const trick=v.trick.length?v.trick:(shown||[]);
-  $('center').innerHTML=[0,1,2,3].map(r=>{const p=trick.find(t=>t.seat===seatOf(r));return `<div class="p${r}">${p?cardHTML(p.card):''}</div>`}).join('');
+  const ck=trick.map(p=>p.seat+p.card.suit+p.card.rank).join();
+  if(ck!==centerKey){centerKey=ck;$('center').innerHTML=[0,1,2,3].map(r=>{const p=trick.find(t=>t.seat===seatOf(r));return `<div class="p${r}">${p?cardHTML(p.card):''}</div>`}).join('');}
+  $('center').className=shown&&swipe?'sw'+((shownWin-my+4)%4):'';
   sorted=[...v.hand].sort((a,b)=>SO.indexOf(a.suit)-SO.indexOf(b.suit)||E.strength(b.rank)-E.strength(a.rank));
   const legal=mine&&v.phase==='playing'?v.legal.filter(a=>a.type==='play').map(a=>a.card):null;
   $('hand').innerHTML=sorted.map((c,i)=>cardHTML(c,(legal?(legal.some(l=>E.sameCard(l,c))?'ok':'dim'):'')+(v.seventhCard&&E.sameCard(v.seventhCard,c)?' seven':''),i,'button')).join('');
   let acts='',kind='',title='',hint=msg;
   const add=t=>hint+=(hint?' — ':'')+t,tb=(k,t,c='')=>`<button class="tile-btn ${c}" data-k="${k}">${t}</button>`;
   if(mine){
-    if(v.phase==='bidding'){
+    if(v.phase==='bidding'&&v.resp){acts=tb('match','Match '+v.highBid)+tb('pass','Pass');kind='pair';title=`${nm(v.challenger)} raised to ${v.highBid}`;}
+    else if(v.phase==='bidding'){
       const ok=v.legal.filter(a=>a.type==='bid').map(a=>a.amount);
       for(let n=16;n<=28;n++)acts+=ok.includes(n)?tb('bid:'+n,n):`<button class="tile-btn" disabled>${n}</button>`;
-      acts+=tb('pass','Pass','pass');kind='bid';title='Your bid';
+      acts+=tb('pass','Pass','pass');kind='bid';title=v.highBidder===null?'Open the bidding':'Raise or pass';
     }else if(v.phase==='trump-select'){
       acts=['S','H','C','D'].map(s=>tb('trump:'+s,SYM[s],'suit'+(isRed(s)?' red':''))).join('')+tb('trump:J','★ Joker')+tb('trump:7','7th card');
       kind='trump';title='Choose trump';add('Joker: no trump. 7th card: its suit becomes trump');
@@ -247,6 +270,7 @@ function describe(seat,a){
   const n=nm(seat),me=seat===my;
   if(a.type==='bid')return `${n} ${me?'bid':'bids'} ${a.amount}`;
   if(a.type==='pass')return `${n} ${me?'pass':'passes'}`;
+  if(a.type==='match')return `${n} ${me?'match':'matches'} ${game.s.highBid}`;
   if(a.type==='setTrump')return a.joker?`${n} chose JOKER: no trump, the led suit wins`:`${n} set a hidden trump`;
   if(a.type==='single')return a.on?`${n} ${me?'go':'goes'} SINGLE HAND, partner sits out`:`${n} ${me?'play':'plays'} with a partner`;
   if(a.type==='double')return a.on?`${n} ${me?'call':'calls'} DOUBLE!`:`${n} ${me?'pass':'passes'} on double`;
@@ -257,9 +281,9 @@ function describe(seat,a){
 async function doAct(seat,a){
   busy=true;
   const b=game.s,done=a.type==='play'&&b.trick.length===(b.single?2:3)?[...b.trick,{seat,card:a.card}]:null;
-  game.act(seat,a);
+  game.act(seat,a);sayAct(a,game.s.highBid);
   if(game.s!==b){msg=game.s.notice||'New deal';offRender();await sleep(2600);}else msg=describe(seat,a);
-  if(done){shown=done;offRender();await sleep(1800);shown=null;}
+  if(done){shown=done;shownWin=game.s.turn;swipe=false;offRender();await sleep(1500);swipe=true;sfx('win');offRender();await sleep(500);swipe=false;shown=null;}
   busy=false;
 }
 async function loop(){
@@ -282,7 +306,8 @@ function connect(){
   sock.on('room',r=>{room=r;my=r.you;if(!r.started){show('lobby');renderLobby();}});
   sock.on('state',st=>{
     mode='on';V=st.view;my=V.you;names=st.names;avs=st.avs;total=st.total;winner=st.winner;msg=st.ev||'';
-    if(st.lastTrick&&st.lastTrick.id!==lastId){lastId=st.lastTrick.id;shown=st.lastTrick.cards;lockUntil=Date.now()+1800;clearTimeout(stimer);stimer=setTimeout(()=>{shown=null;render();},1800);}
+    if(st.lastTrick&&st.lastTrick.id!==lastId){lastId=st.lastTrick.id;shown=st.lastTrick.cards;shownWin=st.lastTrick.winner;swipe=false;lockUntil=Date.now()+2000;clearTimeout(stimer);clearTimeout(stimer2);stimer2=setTimeout(()=>{swipe=true;sfx('win');render();},1500);stimer=setTimeout(()=>{shown=null;swipe=false;render();},2000);}
+    if(st.act){if(lastActId!==null&&st.act.id!==lastActId)sayAct(st.act,V.highBid);lastActId=st.act.id;}
     show('game');render();
   });
   sock.on('err',m=>{msg=m;if(V)render();});
@@ -344,6 +369,7 @@ function send(a){
 $('actions').onclick=e=>{
   const k=e.target.dataset.k;if(!k)return;
   if(k==='pass')send({type:'pass'});
+  else if(k==='match')send({type:'match'});
   else if(k.startsWith('bid:'))send({type:'bid',amount:+k.slice(4)});
   else if(k.startsWith('trump:'))send(k==='trump:7'?{type:'setTrump',seventh:true}:k==='trump:J'?{type:'setTrump',joker:true}:{type:'setTrump',suit:k.slice(6)});
   else if(/^(single|double|redouble):[01]$/.test(k)){const p=k.split(':');send({type:p[0],on:p[1]==='1'});}
@@ -374,6 +400,8 @@ $('menu').onclick=e=>{
   if(k==='create')sock.emit('create',{name:myName,token:tok,av:myAv},cb);
   else sock.emit('join',{name:myName,token:tok,code:$('code').value.trim().toUpperCase(),av:myAv},cb);
 };
+$('snd').onclick=()=>{soundOn=!soundOn;$('snd').textContent=soundOn?'🔔':'🔕';if(!soundOn&&window.speechSynthesis)speechSynthesis.cancel();try{localStorage.s=soundOn?1:0}catch(_){}};
+try{if(localStorage.s==='0'){soundOn=false;$('snd').textContent='🔕';}}catch(_){}
 try{if(localStorage.n)$('name').value=localStorage.n;if(localStorage.a)myAv=Math.min(11,+localStorage.a||0)}catch(_){}
 drawAvs();
 if(IMG){window._pre=[];for(const s of 'SHCD')for(const r of ['7','8','9','10','J','Q','K','A']){const i=new Image();i.src=`cards/${s}-${r}.webp?v=${window.CARD_V||1}`;window._pre.push(i);}}

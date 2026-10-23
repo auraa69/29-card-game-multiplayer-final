@@ -6,8 +6,10 @@ function winnerOf(trick,led,trump){
 function botMove(v){
   const seat=v.you,L=v.legal;
   if(v.phase==='bidding'){
-    const val=v.hand.reduce((n,c)=>n+E.cardPoints(c),0),next=v.highBid+1;
-    return next<=Math.min(15+val,24)?{type:'bid',amount:next}:{type:'pass'};
+    const val=v.hand.reduce((n,c)=>n+E.cardPoints(c),0),cap=Math.min(15+val,24);
+    if(v.resp)return v.highBid<=cap?{type:'match'}:{type:'pass'};   // holder: match a raise if still happy
+    const next=v.highBid+1;
+    return next<=cap?{type:'bid',amount:next}:{type:'pass'};
   }
   if(v.phase==='trump-select'){
     const sc={};v.hand.forEach(c=>sc[c.suit]=(sc[c.suit]||0)+E.strength(c.rank)+3);

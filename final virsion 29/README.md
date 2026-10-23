@@ -31,3 +31,6 @@ This zip does not contain public/.well-known/assetlinks.json. If you already add
 The picture cards are in public/cards (S/H/D/C-7..A.webp plus back.webp, 180x252, about 600 KB in total).
 To turn them off and use plain drawn cards, delete the CARD_IMAGES line in public/config.js.
 To replace a card, put a new 180x252 WebP with the same file name in that folder.
+
+## Sounds
+Bids and passes are spoken with the phone's own voice (browser speech). The bell button next to your avatar turns all sounds on or off.

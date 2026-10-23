@@ -86,7 +86,9 @@ var Game = class {
       stake: 1,
       sitOut: null,
       queue: [],
-      joker: false
+      joker: false,
+      challenger: null,
+      resp: false
     };
   }
   // ---------- queries ----------
@@ -116,8 +118,11 @@ var Game = class {
   legalActions() {
     const s = this.s, seat = s.turn, out = [];
     if (s.phase === "bidding") {
-      out.push({ type: "pass" });
-      for (let a = s.highBid + 1; a <= this.cfg.maxBid; a++) out.push({ type: "bid", amount: a });
+      if (s.resp) out.push({ type: "match" }, { type: "pass" });
+      else {
+        out.push({ type: "pass" });
+        for (let a = s.highBid + 1; a <= this.cfg.maxBid; a++) out.push({ type: "bid", amount: a });
+      }
     } else if (s.phase === "trump-select") {
       for (const suit of SUITS) out.push({ type: "setTrump", suit });
       out.push({ type: "setTrump", joker: true });
@@ -153,6 +158,8 @@ var Game = class {
       trumpSuit: s.trumpRevealed || seat === s.bidder ? s.trumpSuit : null,
       notice: s.notice,
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
+      challenger: s.challenger,
+      resp: s.resp,
       joker: s.joker,
       single: s.single,
       stake: s.stake,
@@ -174,17 +181,52 @@ var Game = class {
     if (seat !== s.turn) throw new Error("Not your turn");
     switch (a.type) {
       case "bid": {
-        if (s.phase !== "bidding") throw new Error("Not bidding phase");
-        if (!Number.isInteger(a.amount) || a.amount <= s.highBid || a.amount > this.cfg.maxBid)
+        if (s.phase !== "bidding" || s.resp) throw new Error("Cannot bid now");
+        if (!Number.isInteger(a.amount) || a.amount <= s.highBid || a.amount < this.cfg.minBid || a.amount > this.cfg.maxBid)
           throw new Error("Illegal bid");
-        s.highBid = a.amount;
-        s.highBidder = seat;
-        return this.advanceBidding();
+        if (s.highBidder === null) {
+          s.highBid = a.amount;
+          s.highBidder = seat;
+          this.setChallenger(seat);
+        } else {
+          s.highBid = a.amount;
+          s.resp = true;
+          s.challenger = seat;
+          s.turn = s.highBidder;
+        }
+        return;
+      }
+      case "match": {
+        if (s.phase !== "bidding" || !s.resp) throw new Error("Nothing to match");
+        s.resp = false;
+        const c = s.challenger;
+        if (s.highBid >= this.cfg.maxBid) {
+          s.passed[c] = true;
+          this.setChallenger(c);
+        } else s.turn = c;
+        return;
       }
       case "pass": {
         if (s.phase !== "bidding") throw new Error("Not bidding phase");
-        s.passed[seat] = true;
-        return this.advanceBidding();
+        if (s.resp) {
+          s.passed[seat] = true;
+          s.highBidder = s.challenger;
+          s.resp = false;
+          this.setChallenger(s.challenger);
+        } else if (s.highBidder === null) {
+          s.passed[seat] = true;
+          if (s.passed.filter(Boolean).length >= 3) {
+            this.startRound(s.dealer, "Three players passed, so the cards are reshuffled");
+            return;
+          }
+          let n = nextSeat(seat);
+          while (s.passed[n]) n = nextSeat(n);
+          s.turn = n;
+        } else {
+          s.passed[seat] = true;
+          this.setChallenger(seat);
+        }
+        return;
       }
       case "setTrump": {
         if (s.phase !== "trump-select") throw new Error("Not trump selection");
@@ -308,20 +350,37 @@ var Game = class {
     const oppHasTrump = s.hands.some((h, i) => teamOf(i) !== bt && h.some((c) => c.suit === s.trumpSuit));
     return oppHasTrump ? "" : "The opponents have no trump card, so the cards are reshuffled";
   }
-  advanceBidding() {
+  // Next player who may still challenge: after `after`, not passed, not the holder.
+  nextChallenger(after) {
     const s = this.s;
-    const active = [0, 1, 2, 3].filter((i) => !s.passed[i]);
-    if (s.highBidder !== null && (active.length === 1 || s.highBid === this.cfg.maxBid)) {
-      s.bidder = s.highBidder;
-      s.bid = s.highBid;
-      this.askDouble();
-    } else if (s.highBidder === null && active.length <= 1) {
-      this.startRound(s.dealer, "Three players passed, so the cards are reshuffled");
-    } else {
-      let t = nextSeat(s.turn);
-      while (s.passed[t]) t = nextSeat(t);
-      s.turn = t;
+    let t = after;
+    for (let i = 0; i < 4; i++) {
+      t = nextSeat(t);
+      if (t !== s.highBidder && !s.passed[t]) return t;
     }
+    return null;
+  }
+  setChallenger(after) {
+    const s = this.s;
+    let c = this.nextChallenger(after);
+    while (c !== null && s.highBid >= this.cfg.maxBid) {
+      s.passed[c] = true;
+      c = this.nextChallenger(c);
+    }
+    if (c === null) {
+      this.endBidding();
+      return;
+    }
+    s.challenger = c;
+    s.turn = c;
+    s.resp = false;
+  }
+  endBidding() {
+    const s = this.s;
+    s.bidder = s.highBidder;
+    s.bid = s.highBid;
+    s.resp = false;
+    this.askDouble();
   }
   trickWinner() {
     const s = this.s;

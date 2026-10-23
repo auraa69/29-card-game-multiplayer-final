@@ -32,6 +32,7 @@ export type Action =
   | { type: 'pass' }
   | { type: 'setTrump'; suit?: Suit; seventh?: boolean; joker?: boolean }               // bidder names the trump suit (secret until revealed)
   | { type: 'single'; on: boolean } | { type: 'double'; on: boolean } | { type: 'redouble'; on: boolean }
+  | { type: 'match' }
   | { type: 'reveal' }                              // void in led suit: ask to see trump
   | { type: 'play'; card: Card; declareMarriage?: boolean };
 
@@ -53,7 +54,7 @@ interface State {
   trick: { seat: Seat; card: Card }[]; ledSuit: Suit | null;
   tricksWon: [number, number]; points: [number, number]; tricksPlayed: number;
   marriage: Team | null; result: RoundResult | null; notice: string;
-  single: boolean; stake: number; sitOut: Seat | null; queue: Seat[]; joker: boolean;
+  single: boolean; stake: number; sitOut: Seat | null; queue: Seat[]; joker: boolean; challenger: Seat | null; resp: boolean;
 }
 
 export class Game {
@@ -81,7 +82,7 @@ export class Game {
       trumpSuit: null, seventhCard: null, trumpRevealed: false, revealAsked: false, revealedBy: null,
       trick: [], ledSuit: null,
       tricksWon: [0, 0], points: [0, 0], tricksPlayed: 0,
-      marriage: null, result: null, notice, single: false, stake: 1, sitOut: null, queue: [], joker: false,
+      marriage: null, result: null, notice, single: false, stake: 1, sitOut: null, queue: [], joker: false, challenger: null, resp: false,
     };
   }
 
@@ -116,8 +117,8 @@ export class Game {
   legalActions(): Action[] {
     const s = this.s, seat = s.turn, out: Action[] = [];
     if (s.phase === 'bidding') {
-      out.push({ type: 'pass' });
-      for (let a = s.highBid + 1; a <= this.cfg.maxBid; a++) out.push({ type: 'bid', amount: a });
+      if (s.resp) out.push({ type: 'match' }, { type: 'pass' });          // holder answers a raise
+      else { out.push({ type: 'pass' }); for (let a = s.highBid + 1; a <= this.cfg.maxBid; a++) out.push({ type: 'bid', amount: a }); }
     } else if (s.phase === 'trump-select') {
       for (const suit of SUITS) out.push({ type: 'setTrump', suit });
       out.push({ type: 'setTrump', joker: true });   // Joker: no trump, the led suit wins
@@ -146,7 +147,7 @@ export class Game {
       trumpSuit: s.trumpRevealed || seat === s.bidder ? s.trumpSuit : null,
       notice: s.notice,
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
-      joker: s.joker, single: s.single, stake: s.stake, sitOut: s.sitOut, trickSize: s.single ? 3 : 4,
+      challenger: s.challenger, resp: s.resp, joker: s.joker, single: s.single, stake: s.stake, sitOut: s.sitOut, trickSize: s.single ? 3 : 4,
       trick: s.trick, ledSuit: s.ledSuit,
       tricksWon: s.tricksWon, marriage: s.marriage,
       points: s.phase === 'finished' ? s.points : null,
@@ -163,16 +164,32 @@ export class Game {
 
     switch (a.type) {
       case 'bid': {
-        if (s.phase !== 'bidding') throw new Error('Not bidding phase');
-        if (!Number.isInteger(a.amount) || a.amount <= s.highBid || a.amount > this.cfg.maxBid)
+        if (s.phase !== 'bidding' || s.resp) throw new Error('Cannot bid now');
+        if (!Number.isInteger(a.amount) || a.amount <= s.highBid || a.amount < this.cfg.minBid || a.amount > this.cfg.maxBid)
           throw new Error('Illegal bid');
-        s.highBid = a.amount; s.highBidder = seat;
-        return this.advanceBidding();
+        if (s.highBidder === null) {                       // opening bid (minimum 16)
+          s.highBid = a.amount; s.highBidder = seat; this.setChallenger(seat);
+        } else {                                           // challenger raises: the holder may match or pass
+          s.highBid = a.amount; s.resp = true; s.challenger = seat; s.turn = s.highBidder;
+        }
+        return;
+      }
+      case 'match': {                                      // holder keeps the bid at the challenger's number
+        if (s.phase !== 'bidding' || !s.resp) throw new Error('Nothing to match');
+        s.resp = false; const c = s.challenger!;
+        if (s.highBid >= this.cfg.maxBid) { s.passed[c] = true; this.setChallenger(c); } else s.turn = c;   // challenger must go higher
+        return;
       }
       case 'pass': {
         if (s.phase !== 'bidding') throw new Error('Not bidding phase');
-        s.passed[seat] = true;
-        return this.advanceBidding();
+        if (s.resp) {                                      // holder gives way: the challenger takes the bid
+          s.passed[seat] = true; s.highBidder = s.challenger; s.resp = false; this.setChallenger(s.challenger!);
+        } else if (s.highBidder === null) {                // nobody has opened yet
+          s.passed[seat] = true;
+          if (s.passed.filter(Boolean).length >= 3) { this.startRound(s.dealer, 'Three players passed, so the cards are reshuffled'); return; }
+          let n = nextSeat(seat); while (s.passed[n]) n = nextSeat(n); s.turn = n;
+        } else { s.passed[seat] = true; this.setChallenger(seat); }   // challenger drops out
+        return;
       }
       case 'setTrump': {
         if (s.phase !== 'trump-select') throw new Error('Not trump selection');
@@ -256,20 +273,19 @@ export class Game {
     return oppHasTrump ? '' : 'The opponents have no trump card, so the cards are reshuffled';
   }
 
-  private advanceBidding() {
-    const s = this.s;
-    const active = ([0, 1, 2, 3] as Seat[]).filter(i => !s.passed[i]);
-    if (s.highBidder !== null && (active.length === 1 || s.highBid === this.cfg.maxBid)) {
-      s.bidder = s.highBidder; s.bid = s.highBid;
-      this.askDouble();                                   // double / redouble come right after the bid
-    } else if (s.highBidder === null && active.length <= 1) {
-      this.startRound(s.dealer, 'Three players passed, so the cards are reshuffled');
-    } else {
-      let t = nextSeat(s.turn);
-      while (s.passed[t]) t = nextSeat(t);
-      s.turn = t;
-    }
+  // Next player who may still challenge: after `after`, not passed, not the holder.
+  private nextChallenger(after: Seat): Seat | null {
+    const s = this.s; let t = after;
+    for (let i = 0; i < 4; i++) { t = nextSeat(t); if (t !== s.highBidder && !s.passed[t]) return t; }
+    return null;
   }
+  private setChallenger(after: Seat) {
+    const s = this.s; let c = this.nextChallenger(after);
+    while (c !== null && s.highBid >= this.cfg.maxBid) { s.passed[c] = true; c = this.nextChallenger(c); }   // nobody can top 28
+    if (c === null) { this.endBidding(); return; }          // only the holder is left
+    s.challenger = c; s.turn = c; s.resp = false;
+  }
+  private endBidding() { const s = this.s; s.bidder = s.highBidder; s.bid = s.highBid; s.resp = false; this.askDouble(); }
 
   private trickWinner(): Seat {
     const s = this.s;

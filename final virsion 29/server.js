@@ -22,7 +22,7 @@ function emitAll(r) {
       code: r.code, you: i, host: r.host, started: !!r.game,
       seats: r.seats.map(x => x && { name: x.name, bot: !!x.bot, on: !!(x.bot || x.sid), av: x.av | 0 }),
     });
-    if (r.game) io.to(s.sid).emit('state', { view: r.game.view(i), names, total: r.total, lastTrick: r.last, ev: r.ev, avs: r.seats.map(x => (x && x.av) | 0), winner: E.gameWinner(r.total) });
+    if (r.game) io.to(s.sid).emit('state', { view: r.game.view(i), names, total: r.total, lastTrick: r.last, ev: r.ev, act: r.act, avs: r.seats.map(x => (x && x.av) | 0), winner: E.gameWinner(r.total) });
   });
 }
 
@@ -30,6 +30,7 @@ function desc(r, seat, a) {
   const n = r.seats[seat].name;
   if (a.type === 'bid') return `${n} bid ${a.amount}`;
   if (a.type === 'pass') return `${n} passed`;
+  if (a.type === 'match') return `${n} matched ${r.game.s.highBid}`;
   if (a.type === 'setTrump') return a.joker ? `${n} chose JOKER: no trump, the led suit wins` : `${n} set the hidden trump`;
   if (a.type === 'single') return a.on ? `${n} goes SINGLE HAND, partner sits out` : `${n} plays with a partner`;
   if (a.type === 'double') return a.on ? `${n} calls DOUBLE!` : `${n} passes on double`;
@@ -42,12 +43,13 @@ function apply(r, seat, a) {
   const g = r.game, before = g.s;
   const done = a.type === 'play' && before.trick.length === (before.single ? 2 : 3) ? [...before.trick, { seat, card: a.card }] : null;
   g.act(seat, a);                                   // throws if illegal
+  r.act = { id: ++r.actId, type: a.type, amount: a.amount, on: a.on, joker: a.joker, declareMarriage: a.declareMarriage };
   r.ev = g.s !== before ? (g.s.notice || 'New deal') : desc(r, seat, a);
-  if (done) r.last = { id: ++r.lastId, cards: done };
+  if (done) r.last = { id: ++r.lastId, cards: done, winner: g.s.turn };
   if (g.s.phase === 'finished' && r.scored !== g.s.result) {
     r.scored = g.s.result; r.total[0] += g.s.result.delta[0]; r.total[1] += g.s.result.delta[1];
   }
-  r.wait = Date.now() + (done ? 2300 : g.s !== before ? 2600 : 0);
+  r.wait = Date.now() + (done ? 2800 : g.s !== before ? 2600 : 0);
   emitAll(r); pump(r);
 }
 
@@ -69,7 +71,7 @@ io.on('connection', sock => {
   const bind = (r, i) => { room = r; seat = i; r.seats[i].sid = sock.id; };
 
   sock.on('create', ({ name, token, av }, cb) => {
-    const r = { code: newCode(), seats: [null, null, null, null], host: 0, game: null, total: [0, 0], last: null, lastId: 0, scored: null, ev: '', t: Date.now() };
+    const r = { code: newCode(), seats: [null, null, null, null], host: 0, game: null, total: [0, 0], last: null, lastId: 0, act: null, actId: 0, scored: null, ev: '', t: Date.now() };
     rooms.set(r.code, r);
     r.seats[0] = { name: clean(name), token: String(token), av: cleanAv(av) };
     bind(r, 0); cb({ ok: 1, code: r.code }); emitAll(r);
