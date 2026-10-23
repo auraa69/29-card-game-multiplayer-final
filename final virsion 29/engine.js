@@ -160,7 +160,7 @@ var Game = class {
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
       challenger: s.challenger,
       resp: s.resp,
-      joker: s.joker,
+      joker: s.joker && (seat === s.bidder || s.trumpRevealed),
       single: s.single,
       stake: s.stake,
       sitOut: s.sitOut,
@@ -230,10 +230,8 @@ var Game = class {
       }
       case "setTrump": {
         if (s.phase !== "trump-select") throw new Error("Not trump selection");
-        if (a.joker) {
-          s.joker = true;
-          s.trumpRevealed = true;
-        } else if (!a.seventh) {
+        if (a.joker) s.joker = true;
+        else if (!a.seventh) {
           if (!a.suit || !SUITS.includes(a.suit)) throw new Error("Bad suit");
           s.trumpSuit = a.suit;
         }

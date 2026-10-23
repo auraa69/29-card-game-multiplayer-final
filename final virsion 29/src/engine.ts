@@ -147,7 +147,7 @@ export class Game {
       trumpSuit: s.trumpRevealed || seat === s.bidder ? s.trumpSuit : null,
       notice: s.notice,
       seventhCard: seat === s.bidder || s.trumpRevealed ? s.seventhCard : null,
-      challenger: s.challenger, resp: s.resp, joker: s.joker, single: s.single, stake: s.stake, sitOut: s.sitOut, trickSize: s.single ? 3 : 4,
+      challenger: s.challenger, resp: s.resp, joker: s.joker && (seat === s.bidder || s.trumpRevealed), single: s.single, stake: s.stake, sitOut: s.sitOut, trickSize: s.single ? 3 : 4,
       trick: s.trick, ledSuit: s.ledSuit,
       tricksWon: s.tricksWon, marriage: s.marriage,
       points: s.phase === 'finished' ? s.points : null,
@@ -193,7 +193,7 @@ export class Game {
       }
       case 'setTrump': {
         if (s.phase !== 'trump-select') throw new Error('Not trump selection');
-        if (a.joker) { s.joker = true; s.trumpRevealed = true; }   // no trump: highest card of the led suit wins
+        if (a.joker) s.joker = true;                       // secret until someone asks: then no trump, the led suit wins
         else if (!a.seventh) {
           if (!a.suit || !SUITS.includes(a.suit)) throw new Error('Bad suit');
           s.trumpSuit = a.suit;

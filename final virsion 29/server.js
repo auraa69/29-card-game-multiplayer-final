@@ -31,10 +31,11 @@ function desc(r, seat, a) {
   if (a.type === 'bid') return `${n} bid ${a.amount}`;
   if (a.type === 'pass') return `${n} passed`;
   if (a.type === 'match') return `${n} matched ${r.game.s.highBid}`;
-  if (a.type === 'setTrump') return a.joker ? `${n} chose JOKER: no trump, the led suit wins` : `${n} set the hidden trump`;
+  if (a.type === 'setTrump') return `${n} set the hidden trump`;
   if (a.type === 'single') return a.on ? `${n} goes SINGLE HAND, partner sits out` : `${n} plays with a partner`;
   if (a.type === 'double') return a.on ? `${n} calls DOUBLE!` : `${n} passes on double`;
   if (a.type === 'redouble') return a.on ? `${n} calls REDOUBLE!` : `${n} declines to redouble`;
+  if (a.type === 'reveal' && r.game.s.joker) return `${n} asked for trump: JOKER, no trump`;
   if (a.type === 'reveal') return `${n} asked for trump: ${SY[r.game.s.trumpSuit]}${r.game.s.seventhCard ? ' (7th card ' + r.game.s.seventhCard.rank + SY[r.game.s.seventhCard.suit] + ')' : ''}`;
   return `${n} played ${a.card.rank}${SY[a.card.suit]}${a.declareMarriage ? ' — marriage!' : ''}`;
 }
@@ -43,7 +44,7 @@ function apply(r, seat, a) {
   const g = r.game, before = g.s;
   const done = a.type === 'play' && before.trick.length === (before.single ? 2 : 3) ? [...before.trick, { seat, card: a.card }] : null;
   g.act(seat, a);                                   // throws if illegal
-  r.act = { id: ++r.actId, type: a.type, amount: a.amount, on: a.on, joker: a.joker, declareMarriage: a.declareMarriage };
+  r.act = { id: ++r.actId, type: a.type, amount: a.amount, on: a.on, declareMarriage: a.declareMarriage };
   r.ev = g.s !== before ? (g.s.notice || 'New deal') : desc(r, seat, a);
   if (done) r.last = { id: ++r.lastId, cards: done, winner: g.s.turn };
   if (g.s.phase === 'finished' && r.scored !== g.s.result) {

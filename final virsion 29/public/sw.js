@@ -1,4 +1,4 @@
-const C='29-v7',CARDS=[];
+const C='29-v8',CARDS=[];
 ['S','H','C','D'].forEach(s=>['7','8','9','10','J','Q','K','A'].forEach(r=>CARDS.push('cards/'+s+'-'+r+'.webp')));CARDS.push('cards/back.webp');
 const F=['./','index.html','manifest.json','icon-192.png','icon-512.png',...CARDS];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(F)));self.skipWaiting();});
