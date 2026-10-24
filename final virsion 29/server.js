@@ -123,6 +123,13 @@ io.on('connection', sock => {
     room.last = null; room.ev = ''; emitAll(room); pump(room);
   });
 
+  let lastReact = 0;                                   // emoji reactions are relayed to the other players
+  sock.on('react', k => {
+    if (!room || seat < 0 || !['haha', 'sad', 'angry'].includes(k) || Date.now() - lastReact < 1500) return;
+    lastReact = Date.now();
+    room.seats.forEach((s, i) => { if (s && s.sid && i !== seat) io.to(s.sid).emit('react', { from: seat, k }); });
+  });
+
   let lastVoice = 0;                                   // voice messages are only relayed, never stored
   sock.on('voice', v => {
     const d = v && v.data;

@@ -34,3 +34,6 @@ To replace a card, put a new 180x252 WebP with the same file name in that folder
 
 ## Sounds
 Bids and passes are spoken with the phone's own voice (browser speech). The bell button next to your avatar turns all sounds on or off.
+
+## Reactions
+Three reaction buttons (haha, sad, angry) sit at the bottom-right of the table. Everyone sees the bubble over your avatar and hears a short sound. Cooldown: 2 seconds.
