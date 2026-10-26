@@ -37,3 +37,6 @@ Bids and passes are spoken with the phone's own voice (browser speech). The bell
 
 ## Reactions
 Three reaction buttons (haha, sad, angry) sit at the bottom-right of the table. Everyone sees the bubble over your avatar and hears a short sound. Cooldown: 2 seconds.
+
+## Logo
+All icon files are in public/ (icon-192, icon-512, icon-maskable-512, apple-touch-icon, favicon-48). After uploading, make a new APK in PWABuilder with the same signing key so the phone icon updates.
